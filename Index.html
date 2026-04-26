@@ -8,42 +8,28 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:Georgia,'Times New Roman',serif;background:#130820;color:#fef0f5;overflow-x:hidden}
-
-/* PETALS */
 #petals{position:fixed;inset:0;pointer-events:none;z-index:0}
 .petal{position:absolute;bottom:-20px;opacity:0;animation:petalFall linear infinite}
 @keyframes petalFall{0%{transform:translateY(0)rotate(0)scale(.5);opacity:0}6%{opacity:.7}90%{opacity:.2}100%{transform:translateY(-108vh)rotate(400deg)scale(1.1);opacity:0}}
-
-/* SCREENS */
 .screen{display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1rem 3.5rem;position:relative;z-index:1;animation:sIn .45s ease}
 .screen.active{display:flex}
 @keyframes sIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 .si{width:100%;max-width:470px}
-
-/* BRAND */
 .brand{text-align:center;margin-bottom:2rem}
 .brand-logo{font-size:2.1rem;letter-spacing:4px;color:#f4a0b8;font-weight:400}
 .brand-sub{font-size:.75rem;letter-spacing:2.5px;color:#8a6a9a;margin-top:5px}
-
-/* CARDS */
 .card{background:rgba(255,255,255,.05);border:1px solid rgba(244,160,184,.2);border-radius:20px;padding:1.8rem;margin-bottom:1.2rem}
 .card-title{font-size:.7rem;letter-spacing:2.5px;text-transform:uppercase;color:#f4a0b8;margin-bottom:1.2rem}
-
-/* FORMS */
 .flabel{display:block;font-size:.77rem;color:#c09090;margin:.9rem 0 .35rem;letter-spacing:.5px}
 .flabel:first-of-type{margin-top:0}
 input[type=text],textarea{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(244,160,184,.22);border-radius:12px;color:#fef0f5;padding:.72rem 1rem;font-family:Georgia,serif;font-size:.94rem;outline:none;transition:border .2s,background .2s}
 input[type=text]:focus,textarea:focus{border-color:rgba(244,160,184,.65);background:rgba(255,255,255,.1)}
 textarea{min-height:95px;resize:vertical;line-height:1.7}
-
-/* TYPE GRID */
 .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:.7rem}
 .tbtn{background:rgba(255,255,255,.05);border:1.5px solid rgba(244,160,184,.18);border-radius:14px;color:#c9a9e8;cursor:pointer;font-family:Georgia,serif;font-size:.83rem;padding:.7rem .4rem;text-align:center;transition:all .2s}
 .tbtn:hover{border-color:rgba(244,160,184,.5);color:#f4a0b8}
 .tbtn.sel{border-color:#f4a0b8;background:rgba(244,160,184,.12);color:#f4a0b8}
 .temoji{font-size:1.4rem;display:block;margin-bottom:4px}
-
-/* TASKS */
 .tlist{display:flex;flex-direction:column;gap:7px;margin-top:.5rem}
 .trow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(244,160,184,.14);border-radius:10px;padding:.5rem .75rem}
 .trow input{border:none;background:transparent;padding:0;flex:1;font-size:.87rem;color:#fef0f5;font-family:Georgia,serif;outline:none}
@@ -51,8 +37,6 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 .rbtn:hover{color:#f4a0b8}
 .abtn{background:none;border:1.5px dashed rgba(244,160,184,.27);border-radius:10px;color:#9a7aaa;cursor:pointer;font-family:Georgia,serif;font-size:.8rem;letter-spacing:1px;padding:.52rem;width:100%;margin-top:6px;transition:all .2s}
 .abtn:hover{border-color:rgba(244,160,184,.6);color:#f4a0b8}
-
-/* BUTTONS */
 .btnp{width:100%;background:linear-gradient(135deg,#7b1e42 0%,#c4516b 100%);border:none;border-radius:14px;color:#fff;cursor:pointer;font-family:Georgia,serif;font-size:1rem;letter-spacing:1px;padding:.88rem;margin-top:1.3rem;transition:opacity .2s,transform .15s}
 .btnp:hover{opacity:.87}
 .btnp:active{transform:scale(.97)}
@@ -64,47 +48,35 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 .ordiv::before,.ordiv::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:rgba(244,160,184,.11)}
 .ordiv::before{left:0}.ordiv::after{right:0}
 .err{color:#e07090;font-size:.8rem;margin-top:.5rem;text-align:center;min-height:1.1rem}
-
-/* CODE DISPLAY */
 .codebox{text-align:center;background:rgba(180,50,100,.13);border:1.5px solid rgba(244,160,184,.38);border-radius:18px;padding:1.8rem;margin-top:1.2rem}
 .codelbl{font-size:.68rem;letter-spacing:2.5px;color:#9a7aaa;margin-bottom:.6rem;text-transform:uppercase}
 .codeval{font-size:2.2rem;letter-spacing:10px;color:#f4a0b8;font-weight:300}
 .codehint{font-size:.77rem;color:#6a4060;margin-top:.5rem}
 .copybtn{background:none;border:1px solid rgba(244,160,184,.38);border-radius:8px;color:#f4a0b8;cursor:pointer;font-family:Georgia,serif;font-size:.77rem;letter-spacing:1px;padding:.38rem 1.1rem;margin-top:.85rem;transition:all .2s}
 .copybtn:hover{background:rgba(244,160,184,.1)}
-
-/* STEPS */
 .steps{display:flex;gap:6px;justify-content:center;margin-bottom:1.8rem}
 .sdot{width:8px;height:8px;border-radius:50%;background:rgba(244,160,184,.18);transition:all .3s}
 .sdot.active{background:#f4a0b8;width:22px;border-radius:4px}
 .sdot.done{background:rgba(244,160,184,.45)}
-
-/* HOME CHOICE */
 .cgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1rem}
 .ccard{background:rgba(255,255,255,.05);border:1px solid rgba(244,160,184,.17);border-radius:18px;padding:1.8rem 1rem;text-align:center;cursor:pointer;transition:all .25s;font-family:Georgia,serif}
 .ccard:hover{border-color:rgba(244,160,184,.5);background:rgba(244,160,184,.08);transform:translateY(-4px)}
 .cicon{font-size:2.4rem;margin-bottom:.65rem;display:block}
 .ctitle{font-size:.9rem;color:#f4a0b8;margin-bottom:3px}
 .csub{font-size:.73rem;color:#6a4560;line-height:1.45}
-
-/* ===== PANDA SCREEN ===== */
 #s-panda{text-align:center}
 .bubbles{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:1.2rem;min-height:90px}
 .bubble{background:white;border-radius:20px;padding:11px 20px;color:#333;font-size:.93rem;position:relative;opacity:0;transform:scale(.85)translateY(8px);transition:all .45s cubic-bezier(.34,1.56,.64,1);max-width:280px;text-align:center;box-shadow:0 4px 22px rgba(0,0,0,.2)}
 .bubble.show{opacity:1;transform:scale(1)translateY(0)}
 .bubble::after{content:'';position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);border:8px solid transparent;border-top-color:white;border-bottom:none}
-
-/* PANDA SVG */
 .pandawrap{cursor:pointer;display:inline-block;animation:pandaBob 3s ease-in-out infinite;filter:drop-shadow(0 12px 28px rgba(244,160,184,.22));transition:transform .2s}
 .pandawrap:hover{animation:pandaBobHover 3s ease-in-out infinite}
 .pandawrap:active{transform:scale(.95)}
 @keyframes pandaBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes pandaBobHover{0%,100%{transform:translateY(0)scale(1.04)}50%{transform:translateY(-9px)scale(1.04)}}
-.eyelid{animation:blink 5s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
-.eyelid2{animation:blink 5s ease-in-out 0.09s infinite;transform-origin:center;transform-box:fill-box}
+.eyelid,.eyelid2{animation:blink 5s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.eyelid2{animation-delay:.09s}
 @keyframes blink{0%,88%,100%{transform:scaleY(1)}93%{transform:scaleY(.06)}97%{transform:scaleY(1)}}
-
-/* GIFT */
 .giftarea{display:inline-block;margin-top:-12px;cursor:pointer}
 .giftperspective{perspective:320px;perspective-origin:top center}
 .giftlid{width:100px;height:21px;background:#9e2e5e;border-radius:6px;position:relative;transform-origin:bottom center;transition:transform .72s cubic-bezier(.34,1.4,.64,1);z-index:4}
@@ -121,8 +93,6 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 @keyframes flyUp{0%{opacity:0;transform:translateY(0)scale(.4)}15%{opacity:1;transform:translateY(-12px)scale(1)}100%{opacity:0;transform:translateY(-130px)scale(.5)}}
 .taphint{font-size:.8rem;color:#8a6a9a;letter-spacing:1.5px;margin-top:1.3rem;animation:pulse 2.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
-
-/* MOOD */
 .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:1.4rem}
 .mbtn{background:rgba(255,255,255,.05);border:1.5px solid transparent;border-radius:16px;cursor:pointer;padding:1rem .4rem;text-align:center;transition:all .22s;font-family:Georgia,serif}
 .mbtn:hover{transform:scale(1.07)}
@@ -135,16 +105,12 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 .m-happy{border-color:rgba(241,196,15,.22);background:rgba(241,196,15,.07)}.m-happy .mlbl{color:#e8c010}.m-happy.sel{border-color:#e8c010;background:rgba(241,196,15,.17)}
 .m-soft{border-color:rgba(155,89,182,.22);background:rgba(155,89,182,.09)}.m-soft .mlbl{color:#c39bd3}.m-soft.sel{border-color:#c39bd3;background:rgba(155,89,182,.2)}
 .m-tired{border-color:rgba(100,120,150,.22);background:rgba(100,120,150,.07)}.m-tired .mlbl{color:#85929e}.m-tired.sel{border-color:#85929e;background:rgba(100,120,150,.17)}
-
-/* LOADING */
 .lhearts{display:flex;gap:14px;justify-content:center;margin-bottom:1.5rem}
 .lh{font-size:1.6rem;color:#f4a0b8;animation:hbeat 1.3s ease-in-out infinite}
 .lh:nth-child(2){animation-delay:.22s}.lh:nth-child(3){animation-delay:.44s}
 @keyframes hbeat{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(1.35);opacity:1}}
 .ltxt{color:#c9a9e8;font-size:1rem;letter-spacing:2px;text-align:center}
 .lsub{color:#6a5070;font-size:.8rem;text-align:center;margin-top:.5rem;font-style:italic;min-height:1.2rem;transition:opacity .3s}
-
-/* MESSAGE */
 .msgcard{background:rgba(244,160,184,.07);border:1px solid rgba(244,160,184,.23);border-radius:20px;padding:1.9rem 1.7rem;margin-bottom:1.1rem;text-align:center}
 .mtbadge{display:inline-block;font-size:.7rem;letter-spacing:2px;text-transform:uppercase;padding:4px 14px;border-radius:20px;background:rgba(244,160,184,.16);color:#f4a0b8;margin-bottom:.9rem}
 .ftline{font-size:.8rem;color:#9a7aaa;margin-bottom:1.1rem}
@@ -239,7 +205,7 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 </div>
 </div>
 
-<!-- CODE SCREEN -->
+<!-- CODE RESULT -->
 <div class="screen" id="s-code">
 <div class="si">
   <div class="steps"><div class="sdot done"></div><div class="sdot done"></div><div class="sdot active"></div></div>
@@ -274,92 +240,56 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 </div>
 </div>
 
-<!-- PANDA SCREEN -->
+<!-- PANDA -->
 <div class="screen" id="s-panda">
 <div class="si" style="text-align:center">
   <div class="bubbles" id="bubbles">
     <div class="bubble" id="b1"></div>
     <div class="bubble" id="b2"></div>
   </div>
-
-  <!-- PANDA SVG -->
   <div class="pandawrap" id="pw" onclick="pandaClick()">
     <svg viewBox="0 0 220 255" width="200" height="232" xmlns="http://www.w3.org/2000/svg">
-      <!-- Ear outer -->
-      <circle cx="56" cy="60" r="25" fill="#111"/>
-      <circle cx="164" cy="60" r="25" fill="#111"/>
-      <!-- Head -->
+      <circle cx="56" cy="60" r="25" fill="#111"/><circle cx="164" cy="60" r="25" fill="#111"/>
       <circle cx="110" cy="110" r="72" fill="white"/>
-      <!-- Ear inner -->
-      <circle cx="56" cy="59" r="13" fill="white"/>
-      <circle cx="164" cy="59" r="13" fill="white"/>
-      <!-- Eye patches -->
+      <circle cx="56" cy="59" r="13" fill="white"/><circle cx="164" cy="59" r="13" fill="white"/>
       <ellipse cx="82" cy="103" rx="22" ry="20" fill="#111" transform="rotate(-10 82 103)"/>
       <ellipse cx="138" cy="103" rx="22" ry="20" fill="#111" transform="rotate(10 138 103)"/>
-      <!-- Eye whites (animated blink) -->
       <g class="eyelid"><ellipse cx="82" cy="103" rx="11.5" ry="11.5" fill="white"/></g>
       <g class="eyelid2"><ellipse cx="138" cy="103" rx="11.5" ry="11.5" fill="white"/></g>
-      <!-- Pupils -->
-      <circle cx="84" cy="101" r="7.5" fill="#111"/>
-      <circle cx="140" cy="101" r="7.5" fill="#111"/>
-      <!-- Eye sparkles -->
-      <circle cx="89" cy="96" r="3.2" fill="white"/>
-      <circle cx="145" cy="96" r="3.2" fill="white"/>
-      <circle cx="90" cy="105" r="1.4" fill="white"/>
-      <circle cx="146" cy="105" r="1.4" fill="white"/>
-      <!-- Nose -->
+      <circle cx="84" cy="101" r="7.5" fill="#111"/><circle cx="140" cy="101" r="7.5" fill="#111"/>
+      <circle cx="89" cy="96" r="3.2" fill="white"/><circle cx="145" cy="96" r="3.2" fill="white"/>
+      <circle cx="90" cy="105" r="1.4" fill="white"/><circle cx="146" cy="105" r="1.4" fill="white"/>
       <ellipse cx="110" cy="123" rx="8.5" ry="6.5" fill="#333"/>
-      <!-- Smile -->
       <path d="M 95 134 Q 110 152 125 134" stroke="#444" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-      <!-- Blush -->
       <ellipse cx="66" cy="126" rx="16" ry="9.5" fill="rgba(255,130,170,.45)"/>
       <ellipse cx="154" cy="126" rx="16" ry="9.5" fill="rgba(255,130,170,.45)"/>
-      <!-- Body -->
       <ellipse cx="110" cy="218" rx="60" ry="50" fill="white"/>
-      <!-- Tummy -->
       <ellipse cx="110" cy="222" rx="33" ry="31" fill="#f0eeee"/>
-      <!-- Arms -->
       <ellipse cx="53" cy="208" rx="21" ry="12" fill="white" transform="rotate(-38 53 208)"/>
       <ellipse cx="167" cy="208" rx="21" ry="12" fill="white" transform="rotate(38 167 208)"/>
-      <!-- Legs -->
       <ellipse cx="79" cy="253" rx="27" ry="13" fill="#111"/>
       <ellipse cx="141" cy="253" rx="27" ry="13" fill="#111"/>
-      <!-- Paw dots -->
       <circle cx="37" cy="205" r="3.5" fill="#e0d8d8"/>
       <circle cx="183" cy="205" r="3.5" fill="#e0d8d8"/>
     </svg>
   </div>
-
-  <!-- GIFT BOX -->
   <div class="giftarea" id="giftArea" onclick="pandaClick()">
     <div style="position:relative;width:90px;margin:0 auto">
-      <!-- Bow -->
       <div class="bowwrap" id="bowEl">
-        <div class="bowl"></div>
-        <div class="bowr"></div>
-        <div class="bowc"></div>
+        <div class="bowl"></div><div class="bowr"></div><div class="bowc"></div>
       </div>
-      <!-- Lid (3D perspective parent) -->
       <div class="giftperspective" style="position:relative">
-        <div class="giftlid" id="giftLid" style="margin:0 auto">
-          <div class="riblid"></div>
-        </div>
+        <div class="giftlid" id="giftLid" style="margin:0 auto"><div class="riblid"></div></div>
       </div>
-      <!-- Box body -->
-      <div class="giftbody">
-        <div class="ribv"></div>
-        <div class="ribh"></div>
-      </div>
-      <!-- Flying hearts -->
+      <div class="giftbody"><div class="ribv"></div><div class="ribh"></div></div>
       <div id="flyH" style="position:absolute;top:0;left:0;width:100%;pointer-events:none"></div>
     </div>
   </div>
-
   <div class="taphint" id="tapH">✨ tap to open your surprise ✨</div>
 </div>
 </div>
 
-<!-- MOOD SCREEN -->
+<!-- MOOD -->
 <div class="screen" id="s-mood">
 <div class="si">
   <div style="text-align:center;margin-bottom:.5rem">
@@ -394,10 +324,107 @@ textarea{min-height:95px;resize:vertical;line-height:1.7}
 </div>
 
 <script>
-/* STATE */
+/* ============================================================
+   🔧 YOUR CREDENTIALS — FILL THESE IN, NOTHING ELSE NEEDED
+   ============================================================ */
+const SUPABASE_URL     = "https://tkdoskdbzdwghyaqiyms.supabase.co/rest/v1/";   // From Supabase → Settings → API
+const SUPABASE_ANON    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrZG9za2RiemR3Z2h5YXFpeW1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNjk0NDYsImV4cCI6MjA5Mjc0NTQ0Nn0.sKSJibhvY-yL5vWtvLl7KOm0U6Dh-lcip08Nm7eQefs";      // From Supabase → Settings → API
+// ✅ No Cloudflare Worker or Anthropic API needed — 100% FREE!
+/* ============================================================
+   NOTE: Also run this SQL once in Supabase → SQL Editor:
+
+   create table love_messages (
+     id uuid default gen_random_uuid() primary key,
+     code text unique not null,
+     from_name text,
+     to_name text,
+     type text,
+     msg text,
+     tasks jsonb default '[]',
+     done jsonb default '[]',
+     created_at timestamptz default now()
+   );
+   alter table love_messages enable row level security;
+   create policy "public read" on love_messages for select using (true);
+   create policy "public insert" on love_messages for insert with check (true);
+   create policy "public update" on love_messages for update using (true);
+   ============================================================ */
+
+/* ── SUPABASE HELPERS (REST API — no SDK needed) ── */
+const SB_H = {"Content-Type":"application/json","apikey":SUPABASE_ANON,"Authorization":"Bearer "+SUPABASE_ANON};
+
+async function dbSave(code, payload){
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/love_messages`, {
+    method:"POST",
+    headers:{...SB_H,"Prefer":"return=representation"},
+    body:JSON.stringify({code, from_name:payload.from, to_name:payload.to,
+      type:payload.type, msg:payload.msg, tasks:payload.tasks, done:[]})
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+
+async function dbLoad(code){
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/love_messages?code=eq.${encodeURIComponent(code)}&select=*`,
+    {headers:SB_H});
+  const rows = await r.json();
+  if(!rows.length) return null;
+  const row = rows[0];
+  return {from:row.from_name, to:row.to_name, type:row.type,
+    msg:row.msg, tasks:row.tasks||[], done:row.done||[]};
+}
+
+async function dbUpdate(code, done){
+  await fetch(`${SUPABASE_URL}/rest/v1/love_messages?code=eq.${encodeURIComponent(code)}`, {
+    method:"PATCH", headers:{...SB_H,"Prefer":"return=minimal"},
+    body:JSON.stringify({done})
+  });
+}
+
+/* ── BEAUTIFUL FREE TEMPLATES (mood × type = 24 combos) ── */
+const TEMPLATES = {
+  love: {
+    angry:   n => `${n}, even when the world feels sharp and loud, my love for you is the one thing that stays perfectly still. I know things feel heavy right now, and I'm not asking you to pretend otherwise. You are allowed to feel everything — I just want you to feel it knowing you're not alone. I love you, in the storm and after it.`,
+    sad:     n => `${n}, I wish I could sit beside you right now and say nothing at all — just be close enough that you feel less alone in this. You carry so much with such quiet grace, and it breaks my heart a little to know you're hurting. Like a candle that doesn't go out in the wind, my love for you only steadies when times get hard. You are deeply, completely loved.`,
+    meh:     n => `${n}, on the ordinary days — the grey ones, the quiet ones, the ones that feel like nothing — that's exactly when I love you most deliberately. Love isn't just fireworks. Sometimes it's just choosing someone again on a Tuesday. I choose you today. I'll choose you tomorrow. Always.`,
+    happy:   n => `${n}, seeing you happy is genuinely one of my favourite things in the world. It's like sunlight found a way to live inside a person. I love you on the difficult days, yes — but loving you on a good day feels like the universe got something exactly right. Keep shining. I'll always be here watching, proudly.`,
+    soft:    n => `${n}, in this quiet, tender moment — I want you to know that what I feel for you isn't something I can fully put into words. It's somewhere between a deep breath and a heartbeat. You make ordinary moments feel sacred. I love you in a way that changes how I see everything else.`,
+    tired:   n => `${n}, please rest. You don't have to earn love by doing more or being more. You are enough exactly as you are right now — tired, unpolished, human. My love for you isn't a reward for your energy. It's just always there, warm and waiting, like a light left on for you.`,
+  },
+  sorry: {
+    angry:   n => `${n}, I understand if you're angry — you have every right to be, and I'm not going to ask you to soften that. What I will say is this: I'm sorry. Not because I have to be, but because hurting you is something I genuinely regret. I'll do better. You deserve better. Take all the time you need.`,
+    sad:     n => `${n}, I hate that I'm the reason for your sadness right now. That's not something I take lightly. I'm truly, deeply sorry — not just for what happened, but for the weight it put on your heart. Like rain that eventually clears, I hope this passes and leaves something green between us.`,
+    meh:     n => `${n}, I know sorry can feel like a small word for a big thing. But I mean it — quietly, sincerely, completely. I'm not asking you to move on immediately. I just want you to know that I see what I did, I understand why it mattered, and I'm committed to making it right.`,
+    happy:   n => `${n}, even in a good moment, this apology needed to come. I'm sorry — genuinely. And I'm glad you're doing okay today. You deserve that peace, even if I disrupted it for a while. I promise to be more careful with something as precious as your trust.`,
+    soft:    n => `${n}, in this gentle, open moment — I want to say I'm sorry with my whole heart. Not a rushed sorry, not a convenient one. A real one. You are someone worth the effort of doing better, and I intend to. Thank you for still being here while I figure that out.`,
+    tired:   n => `${n}, I know you're exhausted — and the last thing you need is more weight. So I'll keep this simple and true: I'm sorry. You don't have to respond or process this right now. Just know it's here, sincere and patient, whenever you're ready.`,
+  },
+  miss: {
+    angry:   n => `${n}, even when things feel tangled between us, I miss you — and that feeling doesn't wait for the right moment. Missing someone isn't always soft. Sometimes it's loud and restless, exactly like this. I miss your laugh, your presence, the ease of just being near you. I hope the distance shrinks soon.`,
+    sad:     n => `${n}, the space where you usually are feels so much bigger when you're not in it. I miss you in the small hours — in quiet rooms and half-finished sentences. Like a song you can't stop hearing, you stay with me. I just needed you to know that.`,
+    meh:     n => `${n}, nothing dramatic — I just miss you. Not in a way that needs a big speech. Just in the way that makes ordinary moments feel slightly incomplete. You add something to the world around me that I notice when it's gone. Come back to me soon.`,
+    happy:   n => `${n}, I'm smiling as I write this because missing you somehow feels warm today — like proof that something really good exists. You're woven into my happy moments even when you're not here. I just wanted to tell you that I miss you, and that makes me feel lucky.`,
+    soft:    n => `${n}, I miss you the way you miss warmth in winter — not dramatically, but constantly, in every cold moment. You have a way of making the world feel safer, gentler, more worth being in. That's not easy to replace. I miss you deeply and tenderly.`,
+    tired:   n => `${n}, I'm running on low today and all I can think is how much easier everything feels when you're around. Missing you is exhausting in the most loving way. I just wanted you to know you're thought of — especially on the hard days.`,
+  },
+  surprise: {
+    angry:   n => `${n}, I know life has been frustrating lately — so I wanted to send something with no agenda except this: you matter to me. Not when things are easy. Not just when you're at your best. Right now, exactly as you are. This is just a little reminder that someone is in your corner, always.`,
+    sad:     n => `${n}, I don't have a fix for what's making you sad — I wish I did. But I can offer this: a little unexpected warmth, sent with a lot of genuine care. You don't have to be okay. You just have to know you're not invisible. I see you, and I think you're wonderful.`,
+    meh:     n => `${n}, no special occasion. No reason except that you crossed my mind and I thought — they should know they're appreciated. So here it is, your ordinary-Tuesday reminder: you are genuinely lovely, and life is better with you in it.`,
+    happy:   n => `${n}, you're already having a good day — and now I'm making it slightly better by showing up unexpectedly just to say: I think you're wonderful. That's it. No ask, no reason. Just appreciation delivered straight to your heart. Enjoy it. 🌸`,
+    soft:    n => `${n}, in a tender moment like this one, I just wanted to reach across the distance and leave something warm for you. Like a flower left on a doorstep — no explanation needed. Just know that someone thinks about you more than you probably realize, and finds something beautiful in you every single time.`,
+    tired:   n => `${n}, you've been doing so much. More than people see, probably more than you admit. So this is just a gentle tap on the shoulder to say: I notice. I appreciate you. And I think it's time someone took care of you the way you take care of everything else. Rest, love. You've earned it.`,
+  }
+};
+
+function getTemplate(type, mood, fromName){
+  const fn = TEMPLATES[type]?.[mood];
+  return fn ? fn(fromName) : `${fromName} wanted you to know you are deeply loved and thought of today. ♥`;
+}
+
+/* ── APP STATE ── */
 const S={toN:'',frN:'',type:'',msg:'',tasks:[],code:'',data:null,mood:'',ai:''};
 
-/* PETALS */
+/* ── PETALS ── */
 (()=>{
   const el=document.getElementById('petals');
   const c=['♥','♡','✿','·','❀'],col=['rgba(244,160,184,.7)','rgba(201,169,232,.6)','rgba(255,200,220,.5)','rgba(180,100,140,.5)'];
@@ -410,18 +437,8 @@ const S={toN:'',frN:'',type:'',msg:'',tasks:[],code:'',data:null,mood:'',ai:''};
   }
 })();
 
-/* NAV */
-function go(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
-}
-
-/* TYPE */
-function selType(el,t){
-  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('sel'));
-  el.classList.add('sel');S.type=t;
-}
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0);}
+function selType(el,t){document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');S.type=t;}
 
 /* TASKS */
 function addTask(v=''){S.tasks.push({id:Date.now()+Math.random(),t:v});renderTasks();}
@@ -452,13 +469,12 @@ async function s2Next(){
   if(!m){document.getElementById('e2').textContent='Please write your message first.';return;}
   S.msg=m;S.tasks=S.tasks.filter(t=>t.t.trim());
   const code=genCode();S.code=code;
-  const data={from:S.frN,to:S.toN,type:S.type,msg:S.msg,tasks:S.tasks.map(t=>t.t.trim()),done:[]};
   try{
-    await window.storage.set('ll:'+code,JSON.stringify(data));
+    await dbSave(code,{from:S.frN,to:S.toN,type:S.type,msg:S.msg,tasks:S.tasks.map(t=>t.t.trim())});
     document.getElementById('codeVal').textContent=code;
     document.getElementById('codeToN').textContent=S.toN;
     go('s-code');
-  }catch(e){document.getElementById('e2').textContent='Something went wrong. Please try again.';}
+  }catch(e){document.getElementById('e2').textContent='Could not save. Check your Supabase credentials.';}
 }
 
 function genCode(){
@@ -478,25 +494,24 @@ async function openCode(){
   document.getElementById('eEnter').textContent='';
   if(!code){document.getElementById('eEnter').textContent='Please enter a code.';return;}
   try{
-    const res=await window.storage.get('ll:'+code);
-    if(!res){document.getElementById('eEnter').textContent='Code not found. Double-check and try again 💔';return;}
-    S.data=JSON.parse(res.value);S.code=code;
+    const data=await dbLoad(code);
+    if(!data){document.getElementById('eEnter').textContent='Code not found. Double-check and try again 💔';return;}
+    S.data=data;S.code=code;
     showPanda();
-  }catch(e){document.getElementById('eEnter').textContent='Code not found. Double-check and try again 💔';}
+  }catch(e){document.getElementById('eEnter').textContent='Something went wrong. Please try again.';}
 }
 
 /* PANDA */
 let opened=false;
 function showPanda(){
   opened=false;
-  const lid=document.getElementById('giftLid');lid.classList.remove('open');
+  document.getElementById('giftLid').classList.remove('open');
   document.getElementById('flyH').innerHTML='';
   document.getElementById('tapH').style.display='';
-  const b1=document.getElementById('b1'),b2=document.getElementById('b2');
-  b1.classList.remove('show');b2.classList.remove('show');b1.textContent='';b2.textContent='';
+  ['b1','b2'].forEach(id=>{const b=document.getElementById(id);b.classList.remove('show');b.textContent='';});
   go('s-panda');
-  setTimeout(()=>{b1.textContent=`Hey ${S.data.to}! 🐾`;b1.classList.add('show');},500);
-  setTimeout(()=>{b2.textContent=`${S.data.from} sent you something special ✨`;b2.classList.add('show');},1400);
+  setTimeout(()=>{const b=document.getElementById('b1');b.textContent=`Hey ${S.data.to}! 🐾`;b.classList.add('show');},500);
+  setTimeout(()=>{const b=document.getElementById('b2');b.textContent=`${S.data.from} sent you something special ✨`;b.classList.add('show');},1400);
 }
 
 function pandaClick(){
@@ -506,8 +521,7 @@ function pandaClick(){
   const fh=document.getElementById('flyH');
   ['💕','💖','✨','🌸','💗','🌷'].forEach((e,i)=>{
     const h=document.createElement('div');h.className='flyh';h.textContent=e;
-    h.style.left=(8+Math.random()*80)+'%';h.style.animationDelay=(i*.16)+'s';
-    fh.appendChild(h);
+    h.style.left=(8+Math.random()*80)+'%';h.style.animationDelay=(i*.16)+'s';fh.appendChild(h);
   });
   const tl={love:'💕 I Love You',sorry:'🥺 I\'m Sorry',miss:'💭 I Miss You',surprise:'🎁 Just For You'};
   const b2=document.getElementById('b2');
@@ -529,29 +543,13 @@ function pickMood(el,m){
 async function genAndShow(){
   go('s-load');
   const d=S.data;
-  const moodMap={angry:'angry and frustrated',sad:'sad and low',meh:'neutral, just okay',happy:'happy and in a good mood',soft:'soft, vulnerable, and emotional',tired:'exhausted and tired'};
-  const typeCtx={love:'express deep, sincere love',sorry:'sincerely apologize and seek forgiveness',miss:'express how deeply they miss them',surprise:'send a beautiful surprise just because'};
   const subs=['reading the stars for you...','sprinkling a little love dust...','choosing the most beautiful words...','crafting something just for you...','whispering to the flowers...'];
   let si=0;const sub=document.getElementById('lsub');
   const iv=setInterval(()=>{sub.style.opacity=0;setTimeout(()=>{si=(si+1)%subs.length;sub.textContent=subs[si];sub.style.opacity=1;},280);},2000);
-  try{
-    const prompt=`Write a heartfelt, emotionally intelligent message from ${d.from} to ${d.to}.
-Intention: ${typeCtx[d.type]}
-${d.from}'s personal note: "${d.msg}"
-${d.to} is currently feeling: ${moodMap[S.mood]}
-
-Write exactly 3-4 sentences that:
-1. Open with something warm that gently acknowledges ${d.to}'s current emotional state (without literally saying "I know you're [mood]") — use psychology and biology of love here
-2. Deliver the core emotion (${typeCtx[d.type]}) tenderly and specifically
-3. Use one soft, poetic metaphor from nature, light, or warmth
-4. End with a specific, grounding reassurance that feels personal and real
-
-Write as ${d.from}, first person. Sound genuine and handwritten — not generic. Return only the message, nothing else.`;
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
-    const data=await r.json();S.ai=data.content[0].text;
-  }catch(e){S.ai=`${d.from} wants you to know how much you matter. Every heartbeat, every quiet moment — you're there. Like morning light that finds every corner, you fill spaces in me I didn't know were empty. I am so grateful you exist.`;}
-  clearInterval(iv);
-  renderMsg();
+  // Small delay so the loading animation feels intentional and magical
+  await new Promise(r=>setTimeout(r,2800));
+  S.ai = getTemplate(d.type, S.mood, d.from);
+  clearInterval(iv);renderMsg();
 }
 
 /* RENDER MESSAGE */
@@ -594,7 +592,7 @@ async function toggleT(i){
   const d=S.data,done=new Set(d.done||[]);
   done.has(i)?done.delete(i):done.add(i);
   d.done=[...done];
-  try{await window.storage.set('ll:'+S.code,JSON.stringify(d));}catch(e){}
+  try{await dbUpdate(S.code,[...done]);}catch(e){}
   const tot=d.tasks.length,cnt=done.size,pct=tot?Math.round(cnt/tot*100):0;
   const tc=document.getElementById('tc'+i);
   if(tc){tc.classList.toggle('done',done.has(i));tc.querySelector('.chkc').textContent=done.has(i)?'✓':'';}
