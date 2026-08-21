@@ -3,7 +3,12 @@ import type { Ports } from '../../domain/ports/index.js';
 import type { RoomStateView } from '../../domain/ports/RealtimeTransport.js';
 import type { RoomId } from '../../domain/values/ids.js';
 import { isJoinable } from '../../domain/entities/Room.js';
-import { initialRole, canAct, DENIAL_MESSAGES } from '../../domain/rules/trustLadder.js';
+import {
+  initialRole,
+  canAct,
+  canPublish,
+  DENIAL_MESSAGES,
+} from '../../domain/rules/trustLadder.js';
 import { LIMITS } from '../../domain/ports/RateLimiter.js';
 import { buildMemberView, buildRoomState } from './roomStateView.js';
 import {
@@ -125,9 +130,19 @@ export class JoinRoom {
       this.ports.metrics.increment('room.joined');
     }
 
-    // 5. The snapshot. Built AFTER presence is written, so the joiner sees
+    // 5. A media credential, so they can HEAR the room.
+    //
+    //    `canPublish` comes from the DOMAIN, never from anything the client
+    //    sent — and for a listener it is false. This is the join path, and the
+    //    join path never grants audio: promotion is the only thing that does.
+    const mediaToken = await this.issueMediaToken(user, roomId, room.maxSpeakers);
+
+    // 6. The snapshot. Built AFTER presence is written, so the joiner sees
     //    themselves in the member list.
-    const state = await buildRoomState(this.ports, room, { viewerId: user.id });
+    const state = await buildRoomState(this.ports, room, {
+      viewerId: user.id,
+      ...(mediaToken === null ? {} : { mediaToken }),
+    });
 
     this.ports.logger.info(
       { roomId, userId: user.id, role, isNewArrival, members: state.members.length },
@@ -135,6 +150,53 @@ export class JoinRoom {
     );
 
     return { state, isNewArrival };
+  }
+
+  /**
+   * Mint a media credential for the joining user.
+   *
+   * TWO THINGS TO NOTICE:
+   *
+   * 1. `canPublish` is computed by `rules/trustLadder.ts` from the membership
+   *    we just wrote. A joiner is a listener, so it is false. The adapter takes
+   *    it as a parameter and never decides for itself — that is what makes
+   *    "listening is the default" structural rather than conventional.
+   *
+   * 2. A FAILURE HERE DOES NOT FAIL THE JOIN. If the media server is down, the
+   *    room still works as a text room: people can see each other and chat,
+   *    they simply cannot hear anything. Refusing the join instead would let a
+   *    media outage take down the entire product, when it should degrade to
+   *    the thing Phase 2 shipped.
+   */
+  private async issueMediaToken(
+    user: User,
+    roomId: RoomId,
+    maxSpeakers: number,
+  ): Promise<RoomStateView['mediaToken'] | null> {
+    const membership = await this.ports.presence.getMember(roomId, user.id);
+    const decision = canPublish(user, membership);
+
+    try {
+      // Idempotent, and done at first join rather than at room creation so a
+      // scheduled room nobody attends never consumes media-server resources.
+      await this.ports.media.createRoom(roomId, { maxParticipants: maxSpeakers + 50 });
+
+      const token = await this.ports.media.issueJoinToken(user.id, roomId, decision.allowed);
+
+      return {
+        token: token.token,
+        url: token.url,
+        roomName: token.roomName,
+        canPublish: token.canPublish,
+        expiresAt: token.expiresAt.toISOString(),
+      };
+    } catch (error) {
+      this.ports.logger.error(
+        { roomId, userId: user.id, err: String(error) },
+        'could not issue a media token; the room degrades to text only',
+      );
+      return null;
+    }
   }
 
   private async enforceJoinLimit(userId: string): Promise<void> {

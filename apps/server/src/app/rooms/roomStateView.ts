@@ -46,6 +46,12 @@ export const SNAPSHOT_MESSAGE_LIMIT = 50;
 export interface RoomStateOptions {
   /** Perspective. Their own role is included; blocked users are filtered out. */
   readonly viewerId: UserId;
+  /**
+   * The viewer own media credential, when one could be issued. Passed in
+   * rather than minted here: this function is a pure projection over already
+   * loaded facts, and minting a token is an effect.
+   */
+  readonly mediaToken?: RoomStateView['mediaToken'];
 }
 
 /**
@@ -107,6 +113,7 @@ export async function buildRoomState(
     // Falls back to listener: if presence has already lapsed for the viewer,
     // the least-privileged answer is the safe one.
     selfRole: selfEntry?.role ?? 'listener',
+    ...(options.mediaToken === undefined ? {} : { mediaToken: options.mediaToken }),
   };
 }
 

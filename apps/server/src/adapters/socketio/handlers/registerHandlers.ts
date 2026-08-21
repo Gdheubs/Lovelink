@@ -6,7 +6,7 @@ import type { UseCases } from '../../../app/index.js';
 import type { SocketSession } from '../server.js';
 import type { SocketEventName } from './schemas.js';
 import { socketSchemas } from './schemas.js';
-import { asRoomId } from '../../../domain/values/ids.js';
+import { asRoomId, asUserId } from '../../../domain/values/ids.js';
 import { isDomainError } from '../../../domain/errors.js';
 
 /**
@@ -135,6 +135,53 @@ export function registerRoomHandlers(context: HandlerContext): void {
     await useCases.sendReaction.execute(user, {
       roomId: asRoomId(payload.roomId),
       reaction: payload.reaction,
+    });
+  });
+
+  // -- speaking -------------------------------------------------------------
+  //
+  // Every one of these re-checks authorization inside the use case, from LIVE
+  // server state. The handler passes through a roomId and a userId and nothing
+  // else — in particular it never passes a role, because there is no payload
+  // field a client could put one in.
+
+  on(context, 'hand:raise', async (payload, user) => {
+    await useCases.raiseHand.execute(user, { roomId: asRoomId(payload.roomId), raised: true });
+  });
+
+  on(context, 'hand:lower', async (payload, user) => {
+    await useCases.raiseHand.execute(user, { roomId: asRoomId(payload.roomId), raised: false });
+  });
+
+  on(context, 'speaker:approve', async (payload, user) => {
+    // HOST ONLY — enforced by ApproveSpeaker reading the actor's role from
+    // presence, not from anything on this socket.
+    await useCases.approveSpeaker.execute(user, {
+      roomId: asRoomId(payload.roomId),
+      userId: asUserId(payload.userId),
+    });
+  });
+
+  on(context, 'speaker:remove', async (payload, user) => {
+    // Host removing someone else, or a speaker stepping down. The two have
+    // completely different authorization, so they are different use cases and
+    // the distinction is made HERE by comparing ids — the only place it is
+    // safe, because `user` is the authenticated session.
+    const roomId = asRoomId(payload.roomId);
+    const targetId = asUserId(payload.userId);
+
+    if (targetId === user.id) {
+      await useCases.stepDownAsSpeaker.execute(user, roomId);
+      return;
+    }
+    await useCases.removeSpeaker.execute(user, { roomId, userId: targetId });
+  });
+
+  on(context, 'room:mute-user', async (payload, user) => {
+    await useCases.muteSpeaker.execute(user, {
+      roomId: asRoomId(payload.roomId),
+      userId: asUserId(payload.userId),
+      muted: payload.muted,
     });
   });
 

@@ -744,3 +744,110 @@ body {
     transform: translateY(-160px) scale(0.7);
   }
 }
+
+/* ============================================================== voice (Phase 3) */
+
+.member__actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+
+.mini-button {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.45rem;
+  /* Below the 44px guidance on purpose: these sit inside a dense host-only
+     strip, and the primary actions all remain full-size. */
+  min-height: 24px;
+}
+
+.mini-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.member__badge--speaker {
+  color: var(--success);
+  background: rgba(107, 196, 160, 0.12);
+}
+
+/* ------------------------------------------------------------------- stage */
+
+.stage {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  min-height: 5.5rem;
+  align-items: center;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  position: relative;
+}
+
+/*
+ * The speaking ring.
+ *
+ * A box-shadow rather than a border: a border changes the element's size and
+ * makes every tile jump a pixel each time someone starts talking, which in a
+ * lively room is a constant twitch.
+ */
+.tile--talking .avatar {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 5px var(--success);
+}
+
+.tile__name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  max-width: 5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile__muted {
+  font-size: 0.58rem;
+  color: var(--danger);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* --------------------------------------------------------------- voice bar */
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.voice-bar__mic {
+  width: auto;
+  margin-top: 0;
+  flex: 1;
+  padding: 0.55rem 1rem;
+  min-height: 40px;
+}
+
+.voice-bar__mic--live {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(107, 196, 160, 0.08);
+}

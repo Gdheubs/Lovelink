@@ -105,10 +105,16 @@ interface Participant {
   socket: Socket;
   /** Everything this client has been told. */
   received: {
-    state: { members: { user: { id: string } }[] }[];
+    state: {
+      members: { user: { id: string } }[];
+      mediaToken?: { token: string; canPublish: boolean };
+    }[];
     messages: { text: string; from: { id: string } }[];
     joined: string[];
     left: string[];
+    hands: { userId: string; raised: boolean }[];
+    promoted: { userId: string; mediaToken?: { token: string } }[];
+    demoted: { userId: string; reason: string }[];
     errors: { code: string; message: string }[];
   };
 }
@@ -141,6 +147,9 @@ function connect(base: Omit<Participant, 'socket' | 'received'>): Participant {
     messages: [],
     joined: [],
     left: [],
+    hands: [],
+    promoted: [],
+    demoted: [],
     errors: [],
   };
 
@@ -156,6 +165,9 @@ function connect(base: Omit<Participant, 'socket' | 'received'>): Participant {
     received.joined.push(payload.member.user.id),
   );
   socket.on('user:left', (payload: { userId: string }) => received.left.push(payload.userId));
+  socket.on('hand:raised', (payload) => received.hands.push(payload));
+  socket.on('speaker:promoted', (payload) => received.promoted.push(payload));
+  socket.on('speaker:demoted', (payload) => received.demoted.push(payload));
   socket.on('error', (payload) => received.errors.push(payload));
 
   return { ...base, socket, received };
@@ -286,8 +298,61 @@ async function main(): Promise<void> {
     afterHeartbeats,
   );
 
-  // -- 7. departure --------------------------------------------------------
-  step('7. half of them leave');
+  // -- 7. voice (Phase 3) --------------------------------------------------
+  step('7. voice: raise hand, approve, publish, revoke');
+
+  const hostParticipant = participants[0]!;
+  const asker = participants[1]!;
+
+  // Every joiner got a LISTEN-ONLY credential.
+  const listenerStates = asker.received.state;
+  const listenerToken = listenerStates.at(-1)?.mediaToken;
+  check('a listener receives a media token', listenerToken !== undefined, {
+    got: listenerToken === undefined ? 'none' : 'token',
+  });
+  check('the listener token CANNOT publish', listenerToken?.canPublish === false, listenerToken);
+
+  asker.received.hands.length = 0;
+  asker.socket.emit('hand:raise', { roomId: room.id });
+
+  const handSeen = await waitUntil('the room sees the raised hand', () =>
+    hostParticipant.received.hands.some((h) => h.userId === asker.userId && h.raised),
+  );
+  check('raising a hand is broadcast to the room', handSeen);
+
+  // Only the host may approve.
+  asker.received.errors.length = 0;
+  asker.socket.emit('speaker:approve', { roomId: room.id, userId: hostParticipant.userId });
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  check(
+    'a non-host CANNOT approve a speaker',
+    asker.received.errors.some((e) => e.code === 'NOT_HOST'),
+    asker.received.errors.slice(0, 2),
+  );
+
+  hostParticipant.socket.emit('speaker:approve', { roomId: room.id, userId: asker.userId });
+
+  const promoted = await waitUntil('the approved user receives a publish token', () =>
+    asker.received.promoted.some((p) => p.userId === asker.userId && p.mediaToken !== undefined),
+  );
+  check('approval issues a NEW publish-enabled token to that user', promoted);
+
+  // The room hears about it WITHOUT the credential.
+  const roomSawPromotion = hostParticipant.received.promoted.find((p) => p.userId === asker.userId);
+  check(
+    'the room is told, but never receives the credential',
+    roomSawPromotion !== undefined && roomSawPromotion.mediaToken === undefined,
+    roomSawPromotion,
+  );
+
+  hostParticipant.socket.emit('speaker:remove', { roomId: room.id, userId: asker.userId });
+  const demoted = await waitUntil('the speaker is demoted', () =>
+    asker.received.demoted.some((d) => d.userId === asker.userId),
+  );
+  check('the host can take the floor back', demoted);
+
+  // -- 8. departure --------------------------------------------------------
+  step('8. half of them leave');
   const leaving = participants.slice(USER_COUNT / 2);
   const staying = participants.slice(0, USER_COUNT / 2);
 

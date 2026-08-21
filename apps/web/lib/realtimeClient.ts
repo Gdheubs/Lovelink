@@ -89,6 +89,23 @@ export interface RoomState {
   raisedHands: string[];
   recentMessages: ChatMessageView[];
   selfRole: 'listener' | 'speaker' | 'host';
+  /**
+   * A media credential for THIS viewer, minted by the server.
+   *
+   * For a listener it carries canPublish=false. The client never decides that
+   * — a publishing token exists only because a host approved someone, and it
+   * arrives via `speaker:promoted`.
+   *
+   * Absent when the media server was unreachable, in which case the room
+   * degrades to text rather than failing to open.
+   */
+  mediaToken?: {
+    token: string;
+    url: string;
+    roomName: string;
+    canPublish: boolean;
+    expiresAt: string;
+  };
 }
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed';

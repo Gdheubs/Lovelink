@@ -7,6 +7,7 @@ import { createMemoryPorts } from './adapters/memory/index.js';
 import { CryptoIdGenerator } from './adapters/memory/MemoryIdGenerator.js';
 import { MemoryNotificationSender } from './adapters/memory/MemoryNotificationSender.js';
 import { JwtTokenService } from './adapters/auth/JwtTokenService.js';
+import { LiveKitMediaRoomProvider } from './adapters/livekit/LiveKitMediaRoomProvider.js';
 import { createDatabase } from './adapters/postgres/db.js';
 import { PostgresRoomRepository } from './adapters/postgres/PostgresRoomRepository.js';
 import { PostgresUserRepository } from './adapters/postgres/PostgresUserRepository.js';
@@ -150,6 +151,16 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     rooms: new PostgresRoomRepository(db),
     presence: new RedisPresenceStore(redis, clock, config.PRESENCE_TTL_SECONDS),
     messages: new CompositeMessageRepository(redis, db),
+    media: new LiveKitMediaRoomProvider(
+      {
+        url: config.LIVEKIT_URL,
+        apiKey: config.LIVEKIT_API_KEY,
+        apiSecret: config.LIVEKIT_API_SECRET,
+        tokenTtlSeconds: config.LIVEKIT_TOKEN_TTL_SECONDS,
+      },
+      clock,
+      logger,
+    ),
     tokens: new JwtTokenService(
       redis,
       clock,
@@ -172,7 +183,6 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     notifications: new MemoryNotificationSender(logger, config.AUTH_ECHO_CODE),
 
     // -- Awaiting their phase: in-memory ------------------------------------
-    media: pendingFallbacks.media, // Phase 3
     reports: pendingFallbacks.reports, // Phase 4
     relationships: pendingFallbacks.relationships, // Phase 5
     surprises: pendingFallbacks.surprises, // Phase 5
@@ -183,7 +193,7 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
 
   logger.warn(
     {
-      inMemoryPorts: ['media', 'reports', 'relationships', 'surprises'],
+      inMemoryPorts: ['reports', 'relationships', 'surprises'],
     },
     'some ports are still in-memory pending their build phase: that data is lost on restart',
   );

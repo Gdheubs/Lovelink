@@ -13,6 +13,10 @@ import { LeaveRoom } from './rooms/LeaveRoom.js';
 import { ListRooms } from './rooms/ListRooms.js';
 import { SendChatMessage, SendTypingIndicator } from './chat/SendChatMessage.js';
 import { SendReaction } from './chat/SendReaction.js';
+import { RaiseHand } from './speaking/RaiseHand.js';
+import { ApproveSpeaker } from './speaking/ApproveSpeaker.js';
+import { RemoveSpeaker, StepDownAsSpeaker } from './speaking/RemoveSpeaker.js';
+import { MuteSpeaker } from './speaking/MuteSpeaker.js';
 
 export * from './auth/AuthenticateRequest.js';
 export * from './auth/Logout.js';
@@ -29,6 +33,10 @@ export * from './rooms/ListRooms.js';
 export * from './rooms/roomStateView.js';
 export * from './chat/SendChatMessage.js';
 export * from './chat/SendReaction.js';
+export * from './speaking/RaiseHand.js';
+export * from './speaking/ApproveSpeaker.js';
+export * from './speaking/RemoveSpeaker.js';
+export * from './speaking/MuteSpeaker.js';
 
 /**
  * The application ring: one file per use case.
@@ -78,7 +86,13 @@ export interface UseCases {
   readonly sendTypingIndicator: SendTypingIndicator;
   readonly sendReaction: SendReaction;
 
-  // Phase 3 adds hand-raise and speaker management.
+  // -- speaking (voice) ----------------------------------------------------
+  readonly raiseHand: RaiseHand;
+  readonly approveSpeaker: ApproveSpeaker;
+  readonly removeSpeaker: RemoveSpeaker;
+  readonly stepDownAsSpeaker: StepDownAsSpeaker;
+  readonly muteSpeaker: MuteSpeaker;
+
   // Phase 4 adds reports, bans and moderation.
   // Phase 5 adds surprises, DMs and calls.
 }
@@ -116,5 +130,11 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     sendChatMessage: new SendChatMessage(ports),
     sendTypingIndicator: new SendTypingIndicator(ports),
     sendReaction: new SendReaction(ports),
+
+    raiseHand: new RaiseHand(ports),
+    approveSpeaker: new ApproveSpeaker(ports),
+    removeSpeaker: new RemoveSpeaker(ports),
+    stepDownAsSpeaker: new StepDownAsSpeaker(ports),
+    muteSpeaker: new MuteSpeaker(ports),
   };
 }

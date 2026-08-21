@@ -136,7 +136,7 @@ const schema = z.object({
   /** Browser-facing websocket URL, e.g. wss://media.example.com. */
   LIVEKIT_URL: z.string().default('ws://localhost:7880'),
   LIVEKIT_API_KEY: z.string().default('devkey'),
-  LIVEKIT_API_SECRET: z.string().default('devsecretdevsecretdevsecret1234'),
+  LIVEKIT_API_SECRET: z.string().default('devsecret-devsecret-devsecret-32'),
   /** How long a media token stays valid. Short: they are re-issued on promotion. */
   LIVEKIT_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
 
@@ -172,7 +172,7 @@ export interface Config extends RawConfig {
 const INSECURE_DEFAULTS = {
   JWT_SECRET: 'dev-only-insecure-secret-change-me',
   ADMIN_TOKEN: 'dev-admin-token',
-  LIVEKIT_API_SECRET: 'devsecretdevsecretdevsecret1234',
+  LIVEKIT_API_SECRET: 'devsecret-devsecret-devsecret-32',
 } as const;
 
 class ConfigError extends Error {

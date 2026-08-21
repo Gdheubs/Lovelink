@@ -8,6 +8,7 @@ import {
   type RoomMemberView,
   type RoomState,
 } from './realtimeClient';
+import { media, type MediaConnectionState, type MediaParticipantView } from './mediaClient';
 
 /**
  * Everything a room screen needs, in one hook.
@@ -42,6 +43,16 @@ export interface UseRoomResult {
   readonly messages: readonly ChatMessageView[];
   readonly typingUserIds: readonly string[];
   readonly error: string | null;
+  /** Voice: who is audible and who is talking right now. */
+  readonly speakers: readonly MediaParticipantView[];
+  readonly voice: MediaConnectionState;
+  readonly canPublish: boolean;
+  readonly micEnabled: boolean;
+  raiseHand: (raised: boolean) => void;
+  approveSpeaker: (userId: string) => void;
+  removeSpeaker: (userId: string) => void;
+  muteUser: (userId: string, muted: boolean) => void;
+  toggleMic: () => void;
   sendMessage: (text: string) => void;
   sendTyping: () => void;
   sendReaction: (reaction: string) => void;
@@ -54,18 +65,27 @@ const TYPING_TIMEOUT_MS = 4_000;
 /** Matches the server's snapshot limit; keeps the DOM bounded in a busy room. */
 const MAX_RENDERED_MESSAGES = 200;
 
-export function useRoom(roomId: string | null): UseRoomResult {
+export function useRoom(roomId: string | null, selfUserId: string | null): UseRoomResult {
   const [connection, setConnection] = useState<ConnectionState>(realtime.getState());
   const [state, setState] = useState<RoomState | null>(null);
   const [messages, setMessages] = useState<readonly ChatMessageView[]>([]);
   const [typingUserIds, setTypingUserIds] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [speakers, setSpeakers] = useState<readonly MediaParticipantView[]>([]);
+  const [voice, setVoice] = useState<MediaConnectionState>('disconnected');
+  const [canPublish, setCanPublish] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
 
   // Kept in a ref as well as state so the reconnect handler — which is
   // registered once — always sees the CURRENT room rather than the one that was
   // current when it was registered.
   const roomIdRef = useRef<string | null>(roomId);
   roomIdRef.current = roomId;
+
+  // The viewer's own id, so promotion/demotion handlers can tell "me" from
+  // "someone else" without re-subscribing whenever it changes.
+  const selfIdRef = useRef<string | null>(selfUserId);
+  selfIdRef.current = selfUserId;
 
   const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -76,6 +96,8 @@ export function useRoom(roomId: string | null): UseRoomResult {
     const unsubscribers: (() => void)[] = [];
 
     unsubscribers.push(realtime.onConnectionState(setConnection));
+    unsubscribers.push(media.onConnectionState(setVoice));
+    unsubscribers.push(media.onParticipantsChanged(setSpeakers));
 
     // -- the snapshot: replaces everything --------------------------------
     unsubscribers.push(
@@ -84,6 +106,24 @@ export function useRoom(roomId: string | null): UseRoomResult {
         setState(snapshot);
         setMessages(snapshot.recentMessages);
         setError(null);
+
+        // The snapshot carries a media credential the SERVER minted. For a
+        // listener it cannot publish — the client never decides that.
+        //
+        // A join with no token means the media server was unreachable, and the
+        // room degrades to text rather than failing: people can still see each
+        // other and chat.
+        if (snapshot.mediaToken !== undefined) {
+          void media
+            .connect({
+              token: snapshot.mediaToken.token,
+              url: snapshot.mediaToken.url,
+              roomName: snapshot.mediaToken.roomName,
+              expiresAt: snapshot.mediaToken.expiresAt,
+            })
+            .then(() => setCanPublish(media.canPublish()))
+            .catch(() => setError('Could not connect to audio. You can still read and type.'));
+        }
       }),
     );
 
@@ -131,6 +171,102 @@ export function useRoom(roomId: string | null): UseRoomResult {
     );
 
     unsubscribers.push(
+      realtime.on('speaker:promoted', (payload) => {
+        if (payload.roomId !== roomIdRef.current) return;
+
+        setState((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                selfRole: payload.userId === selfIdRef.current ? 'speaker' : current.selfRole,
+                members: current.members.map((m) =>
+                  m.user.id === payload.userId ? { ...m, role: 'speaker', handRaised: false } : m,
+                ),
+              },
+        );
+
+        // Only the promoted user receives a credential. Reconnecting with it is
+        // what actually grants audio — there is no local flag that could.
+        if (payload.mediaToken !== undefined) {
+          void media
+            .upgrade({
+              token: payload.mediaToken.token,
+              url: payload.mediaToken.url,
+              roomName: payload.mediaToken.roomName,
+              expiresAt: payload.mediaToken.expiresAt,
+            })
+            .then(() => {
+              setCanPublish(media.canPublish());
+              setMicEnabled(media.isMicrophoneEnabled());
+            })
+            .catch(() => setError('You have the floor, but your microphone could not start.'));
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      realtime.on('speaker:demoted', (payload) => {
+        if (payload.roomId !== roomIdRef.current) return;
+
+        setState((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                selfRole: payload.userId === selfIdRef.current ? 'listener' : current.selfRole,
+                members: current.members.map((m) =>
+                  m.user.id === payload.userId ? { ...m, role: 'listener' } : m,
+                ),
+              },
+        );
+
+        // The media server already revoked publishing; this only updates the
+        // UI so it stops showing a live microphone.
+        if (payload.userId === selfIdRef.current) {
+          setCanPublish(false);
+          setMicEnabled(false);
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      realtime.on('hand:raised', (payload) => {
+        if (payload.roomId !== roomIdRef.current) return;
+        setState((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                members: current.members.map((m) =>
+                  m.user.id === payload.userId ? { ...m, handRaised: payload.raised } : m,
+                ),
+                raisedHands: payload.raised
+                  ? [...new Set([...current.raisedHands, payload.userId])]
+                  : current.raisedHands.filter((id) => id !== payload.userId),
+              },
+        );
+      }),
+    );
+
+    unsubscribers.push(
+      realtime.on('room:muted', (payload) => {
+        if (payload.roomId !== roomIdRef.current) return;
+        setState((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                members: current.members.map((m) =>
+                  m.user.id === payload.userId ? { ...m, mutedByHost: payload.muted } : m,
+                ),
+              },
+        );
+        if (payload.userId === selfIdRef.current && payload.muted) setMicEnabled(false);
+      }),
+    );
+
+    unsubscribers.push(
       realtime.on('chat:typing', (payload) => {
         if (payload.roomId !== roomIdRef.current) return;
         markTyping(payload.userId);
@@ -169,6 +305,9 @@ export function useRoom(roomId: string | null): UseRoomResult {
 
     return () => {
       clearInterval(heartbeat);
+      // Leaving the screen leaves the audio room. Without this, navigating away
+      // keeps the microphone live and the room audible.
+      void media.disconnect();
       for (const unsubscribe of unsubscribers) unsubscribe();
       for (const timer of typingTimers.current.values()) clearTimeout(timer);
       typingTimers.current.clear();
@@ -215,6 +354,42 @@ export function useRoom(roomId: string | null): UseRoomResult {
     realtime.emit('reaction:send', { roomId: roomIdRef.current, reaction });
   }, []);
 
+  const raiseHand = useCallback((raised: boolean) => {
+    if (roomIdRef.current === null) return;
+    realtime.emit(raised ? 'hand:raise' : 'hand:lower', { roomId: roomIdRef.current });
+  }, []);
+
+  /**
+   * Host actions. The UI only renders these for someone it believes is the
+   * host, but that belief is a convenience — the server re-checks the role from
+   * live presence on every one of them, so a modified client gains nothing by
+   * showing the buttons to itself.
+   */
+  const approveSpeaker = useCallback((userId: string) => {
+    if (roomIdRef.current === null) return;
+    realtime.emit('speaker:approve', { roomId: roomIdRef.current, userId });
+  }, []);
+
+  const removeSpeaker = useCallback((userId: string) => {
+    if (roomIdRef.current === null) return;
+    realtime.emit('speaker:remove', { roomId: roomIdRef.current, userId });
+  }, []);
+
+  const muteUser = useCallback((userId: string, muted: boolean) => {
+    if (roomIdRef.current === null) return;
+    realtime.emit('room:mute-user', { roomId: roomIdRef.current, userId, muted });
+  }, []);
+
+  const toggleMic = useCallback(() => {
+    const next = !media.isMicrophoneEnabled();
+    void media
+      .setMicrophoneEnabled(next)
+      .then(() => setMicEnabled(media.isMicrophoneEnabled()))
+      .catch((caught: unknown) =>
+        setError(caught instanceof Error ? caught.message : 'Could not change your microphone.'),
+      );
+  }, []);
+
   const leave = useCallback(() => {
     if (roomIdRef.current === null) return;
     realtime.emit('room:leave', { roomId: roomIdRef.current });
@@ -226,6 +401,15 @@ export function useRoom(roomId: string | null): UseRoomResult {
     messages,
     typingUserIds,
     error,
+    speakers,
+    voice,
+    canPublish,
+    micEnabled,
+    raiseHand,
+    approveSpeaker,
+    removeSpeaker,
+    muteUser,
+    toggleMic,
     sendMessage,
     sendTyping,
     sendReaction,

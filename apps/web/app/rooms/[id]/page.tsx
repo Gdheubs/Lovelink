@@ -9,12 +9,17 @@ import { avatarFor } from '../../../lib/avatar';
 /**
  * The room screen: member list, live chat, reactions.
  *
- * NO AUDIO CONTROLS HERE YET, DELIBERATELY. Phase 2 exists to prove the entire
- * realtime backbone — presence, heartbeat, ghost cleanup, reconnect snapshots,
- * rate limiting — before media complexity arrives. When a bug appears now, it
- * is unambiguously in the backbone rather than somewhere between three layers.
+ * THE UI NEVER GRANTS ITSELF ANYTHING.
  *
- * Phase 3 adds the raise-hand button and speaker tiles to this screen.
+ * Host controls are rendered when this client believes it is the host, and the
+ * raise-hand button when it believes it is a listener. Both beliefs come from
+ * the server's `room:state` snapshot, and both are re-checked server-side on
+ * every action — so a modified client that renders the buttons anyway gains
+ * nothing but a rejection.
+ *
+ * The microphone is the sharpest case: `canPublish` here reflects the token the
+ * SERVER issued. Setting it true locally would not produce audio, because the
+ * media server enforces the grant encoded in that token.
  */
 
 /** The closed palette. Names go over the wire; glyphs are a client concern. */
@@ -45,11 +50,20 @@ export default function RoomPage() {
     messages,
     typingUserIds,
     error,
+    speakers,
+    voice,
+    canPublish,
+    micEnabled,
+    raiseHand,
+    approveSpeaker,
+    removeSpeaker,
+    muteUser,
+    toggleMic,
     sendMessage,
     sendTyping,
     sendReaction,
     leave,
-  } = useRoom(status === 'authenticated' ? roomId : null);
+  } = useRoom(status === 'authenticated' ? roomId : null, profile?.id ?? null);
 
   const [draft, setDraft] = useState('');
   const [floating, setFloating] = useState<FloatingReaction[]>([]);
@@ -109,6 +123,14 @@ export default function RoomPage() {
     );
   }
 
+  const selfRole = state?.selfRole ?? 'listener';
+  const isHost = selfRole === 'host';
+  // Who is audible RIGHT NOW, from the media layer rather than from roles.
+  const speakingIds = new Set(speakers.filter((p) => p.isSpeaking).map((p) => p.identity));
+  const handRaisedByMe = (state?.members ?? []).some(
+    (m) => m.user.id === profile?.id && m.handRaised,
+  );
+
   const typingNames = (state?.members ?? [])
     .filter((m) => typingUserIds.includes(m.user.id) && m.user.id !== profile?.id)
     .map((m) => m.user.displayName);
@@ -161,14 +183,114 @@ export default function RoomPage() {
                 {avatar.initials}
               </div>
               <span className="member__name">{member.user.displayName}</span>
+
               {member.role === 'host' && <span className="member__badge">host</span>}
+              {member.role === 'speaker' && (
+                <span className="member__badge member__badge--speaker">speaking</span>
+              )}
+              {member.handRaised && <span className="member__badge">✋</span>}
               {member.mutedByHost && (
                 <span className="member__badge member__badge--muted">muted</span>
+              )}
+
+              {/* Host controls. Rendered on belief, ENFORCED on the server —
+                  every one of these is re-checked against live presence. */}
+              {isHost && member.user.id !== profile?.id && (
+                <div className="member__actions">
+                  {member.role === 'listener' ? (
+                    <button
+                      type="button"
+                      className="mini-button"
+                      onClick={() => approveSpeaker(member.user.id)}
+                      title="Invite to speak"
+                    >
+                      invite
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mini-button"
+                      onClick={() => removeSpeaker(member.user.id)}
+                      title="Take the floor back"
+                    >
+                      remove
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="mini-button"
+                    onClick={() => muteUser(member.user.id, !member.mutedByHost)}
+                    title={member.mutedByHost ? 'Unmute' : 'Mute'}
+                  >
+                    {member.mutedByHost ? 'unmute' : 'mute'}
+                  </button>
+                </div>
               )}
             </div>
           );
         })}
       </section>
+
+      {/* The stage: who currently has the floor, and who is talking. */}
+      <section className="stage" aria-label="On stage">
+        {(state?.members ?? [])
+          .filter((m) => m.role !== 'listener')
+          .map((member) => {
+            const avatar = avatarFor(member.user.avatarSeed, member.user.displayName);
+            const talking = speakingIds.has(member.user.id) && !member.mutedByHost;
+
+            return (
+              <div className={`tile ${talking ? 'tile--talking' : ''}`} key={member.user.id}>
+                <div
+                  className="avatar"
+                  style={{
+                    width: '3.25rem',
+                    height: '3.25rem',
+                    background: avatar.background,
+                    color: avatar.foreground,
+                    fontSize: '0.95rem',
+                  }}
+                  aria-hidden="true"
+                >
+                  {avatar.initials}
+                </div>
+                <span className="tile__name">{member.user.displayName}</span>
+                {member.mutedByHost && <span className="tile__muted">muted</span>}
+              </div>
+            );
+          })}
+
+        {(state?.members ?? []).filter((m) => m.role !== 'listener').length === 0 && (
+          <p className="faint" style={{ margin: '0.5rem auto' }}>
+            Nobody has the floor yet.
+          </p>
+        )}
+      </section>
+
+      {/* Voice controls. What is shown depends on what the SERVER granted. */}
+      <div className="voice-bar">
+        <span className={`pill pill--${voice === 'connected' ? 'connected' : 'connecting'}`}>
+          {voice === 'connected' ? 'Audio on' : voice === 'disconnected' ? 'No audio' : 'Audio…'}
+        </span>
+
+        {canPublish ? (
+          <button
+            type="button"
+            className={`button button--secondary voice-bar__mic ${micEnabled ? 'voice-bar__mic--live' : ''}`}
+            onClick={toggleMic}
+          >
+            {micEnabled ? '🎙 Mic on' : '🔇 Mic off'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="button button--secondary voice-bar__mic"
+            onClick={() => raiseHand(!handRaisedByMe)}
+          >
+            {handRaisedByMe ? 'Lower hand' : '✋ Raise hand'}
+          </button>
+        )}
+      </div>
 
       {/* Chat */}
       <div className="room__chat" ref={scrollRef}>

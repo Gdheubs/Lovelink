@@ -1,0 +1,74 @@
+# =============================================================================
+# LiveKit server configuration.
+#
+# Mounted read-only into the container by docker-compose (media profile).
+# Keys come from the same values the API signs tokens with, so the two MUST
+# agree: LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.
+# =============================================================================
+
+port: 7880
+
+rtc:
+  # The UDP range published in docker-compose. Kept deliberately small (101
+  # ports) because every one has to be forwarded and firewalled; it is ample
+  # for a single-VPS deployment where each participant needs one.
+  port_range_start: 50000
+  port_range_end: 50100
+
+  # TCP fallback on 7881.
+  #
+  # THIS IS NOT OPTIONAL IN PRACTICE. A meaningful share of mobile and
+  # corporate networks block UDP outright, and without a TCP path those users
+  # simply cannot hear anything — with no error that points at the cause.
+  tcp_port: 7881
+
+  # Required when the server sits behind Docker's NAT: LiveKit must advertise
+  # the address a client can actually reach, not the container's internal one.
+  use_external_ip: true
+
+keys:
+  # Overridden at deploy time. The development value matches .env.example, and
+  # config.ts refuses to start production with it.
+  devkey: devsecret-devsecret-devsecret-32
+
+# -----------------------------------------------------------------------------
+# TURN
+# -----------------------------------------------------------------------------
+#
+# WHY THIS EXISTS AT ALL, and why Phase 3's exit criterion names mobile data:
+#
+# Carrier-grade NAT — which most mobile networks use — means two phones often
+# cannot establish a direct connection no matter how good the ICE candidates
+# are. A relay is the only path that works, and without one the app appears to
+# work perfectly on office wifi and fails silently on 4G.
+#
+# That failure mode is the single most common way a self-hosted WebRTC
+# deployment ships broken: it is invisible in every test done at a desk.
+#
+# LiveKit can run its own embedded TURN, or defer to the coturn container in
+# docker-compose. The embedded one is simpler for a single VPS; coturn is there
+# for deployments that want to scale it separately.
+turn:
+  enabled: false
+  # To use LiveKit's embedded TURN instead of coturn, set enabled: true and
+  # supply a domain plus TLS certificates — TURN over TLS on 443 is what gets
+  # through the most restrictive networks.
+  # domain: media.loverlink.online
+  # tls_port: 5349
+  # udp_port: 3478
+
+logging:
+  level: info
+  # JSON so the media server's logs are readable by the same tooling as the
+  # application's structured logs.
+  json: true
+
+# Rooms are created on demand by the API (MediaRoomProvider.createRoom) rather
+# than declared here, so a scheduled room nobody attends never consumes
+# resources.
+room:
+  auto_create: false
+  # Matches the emptyTimeout the adapter sets: tear a room down shortly after
+  # the last person leaves.
+  empty_timeout: 120
+  max_participants: 200

@@ -63,6 +63,32 @@ export interface RoomStateView {
   readonly recentMessages: readonly ChatMessageView[];
   /** Present only in the snapshot sent to the joining user, never broadcast. */
   readonly selfRole: RoomRole;
+
+  /**
+   * A media credential for THIS user, so they can hear the room.
+   *
+   * Issued on every join and re-join, which also means a token that expired
+   * while the client was away is replaced without a separate request.
+   *
+   * INVARIANT: for a listener this token carries canPublish=false. A
+   * publish-enabled token is minted ONLY by ApproveSpeaker and delivered by
+   * the `speaker:promoted` event — there is no path through join that grants
+   * audio.
+   *
+   * It appears here rather than as its own event because the `room:state`
+   * snapshot is sent
+   * to the joining user alone, and the event catalogue (architecture §4) is
+   * closed: adding a credential-fetch event would widen the surface for no
+   * gain. Absent when the media provider is unavailable, so a text-only client
+   * still joins successfully.
+   */
+  readonly mediaToken?: {
+    readonly token: string;
+    readonly url: string;
+    readonly roomName: string;
+    readonly canPublish: boolean;
+    readonly expiresAt: string;
+  };
 }
 
 export interface ServerEvents {
