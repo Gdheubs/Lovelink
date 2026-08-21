@@ -27,7 +27,8 @@
     "ci": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
-    "room-check": "npm run room-check --workspace @loverlink/server"
+    "room-check": "npm run room-check --workspace @loverlink/server",
+    "safety-check": "npm run safety-check --workspace @loverlink/server"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

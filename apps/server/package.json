@@ -18,7 +18,8 @@
     "migrate": "tsx src/adapters/postgres/migrate.ts up",
     "migrate:status": "tsx src/adapters/postgres/migrate.ts status",
     "smoke": "tsx scripts/smoke.ts",
-    "room-check": "tsx scripts/roomLoadCheck.ts"
+    "room-check": "tsx scripts/roomLoadCheck.ts",
+    "safety-check": "tsx scripts/safetyCheck.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
