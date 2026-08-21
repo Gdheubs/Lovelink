@@ -45,12 +45,35 @@ interface StoredEntry {
 
 /**
  * KEYS[1] room hash, KEYS[2] user's room set, KEYS[3] expiry index
- * ARGV[1] userId, ARGV[2] roomId, ARGV[3] payload JSON, ARGV[4] deadline ms
+ * ARGV[1] userId, ARGV[2] roomId, ARGV[3] payload JSON, ARGV[4] deadline ms,
+ * ARGV[5] now ms
+ *
+ * Returns 1 when this call made the user NEWLY present, 0 when it refreshed an
+ * existing entry.
+ *
+ * The distinction cannot be computed outside the script: reading presence and
+ * then writing it is a check-then-act race, and several joins fired at once
+ * would each believe they were the first. Here it falls out of HSET's own
+ * return value, atomically.
+ *
+ * An entry whose deadline has already passed counts as ABSENT — the room was
+ * told they left, so coming back is a genuine new arrival.
  */
 const SET_ONLINE_SCRIPT = `
+  local member = ARGV[2] .. '|' .. ARGV[1]
+  local previous = redis.call('ZSCORE', KEYS[3], member)
+  local wasPresent = 0
+  if previous and tonumber(previous) > tonumber(ARGV[5]) then
+    wasPresent = 1
+  end
+
   redis.call('HSET', KEYS[1], ARGV[1], ARGV[3])
   redis.call('SADD', KEYS[2], ARGV[2])
-  redis.call('ZADD', KEYS[3], ARGV[4], ARGV[2] .. '|' .. ARGV[1])
+  redis.call('ZADD', KEYS[3], ARGV[4], member)
+
+  if wasPresent == 1 then
+    return 0
+  end
   return 1
 `;
 
@@ -133,11 +156,16 @@ export class RedisPresenceStore implements PresenceStore {
     };
   }
 
-  async setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<void> {
+  async setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<boolean> {
     // Re-joining does not inherit a raised hand from a previous session: a hand
     // that survived a reconnect would sit in the host's queue belonging to
     // someone who no longer remembers raising it.
-    const existing = await this.readEntry(entry.roomId, entry.userId);
+    //
+    // This read is OUTSIDE the atomic section, and that is acceptable: the
+    // worst case is a raised hand carried across a reconnect that raced a
+    // rejoin, which is cosmetic. The part that must be atomic — whether this
+    // call made the user newly present — is decided inside the script.
+    const existing = await this.getMember(entry.roomId, entry.userId);
 
     const payload: StoredEntry = {
       role: entry.role,
@@ -145,7 +173,7 @@ export class RedisPresenceStore implements PresenceStore {
       handRaisedAtMs: existing?.handRaisedAtMs ?? null,
     };
 
-    await this.redis.eval(
+    const isNewArrival = (await this.redis.eval(
       SET_ONLINE_SCRIPT,
       3,
       KEY.presenceRoom(entry.roomId),
@@ -155,7 +183,10 @@ export class RedisPresenceStore implements PresenceStore {
       entry.roomId,
       JSON.stringify(payload),
       String(this.deadline()),
-    );
+      String(this.clock.nowMs()),
+    )) as number;
+
+    return isNewArrival === 1;
   }
 
   async setOffline(roomId: RoomId, userId: UserId): Promise<void> {

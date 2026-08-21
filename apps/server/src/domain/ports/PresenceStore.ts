@@ -42,8 +42,21 @@ export interface PresenceStore {
   /**
    * Mark a user present in a room. Idempotent: calling twice does not create a
    * duplicate, it refreshes.
+   *
+   * @returns true when this call made the user newly present; false when they
+   *          were already there and this was a refresh.
+   *
+   * WHY IT REPORTS THAT: the room is told `user:joined` exactly once per
+   * arrival. Deciding that by READING presence and then writing it is a
+   * check-then-act race — an impatient double-tap fires several joins before
+   * any of them has written, so every one of them believes it is the first and
+   * the room watches the same person walk in five times.
+   *
+   * Making the WRITE report whether it created the entry closes that window:
+   * in Redis it falls out of HSET's own return value, and in the memory fake
+   * out of there being no await between the check and the set.
    */
-  setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<void>;
+  setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<boolean>;
 
   /** Remove a user from a room's live set. Idempotent. */
   setOffline(roomId: RoomId, userId: UserId): Promise<void>;

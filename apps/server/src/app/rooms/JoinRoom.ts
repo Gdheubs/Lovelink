@@ -72,16 +72,21 @@ export class JoinRoom {
       throw new ConflictError('That room has closed.', 'ROOM_CLOSED', { roomId });
     }
 
-    // Was this user already present? Determines whether the room hears about
-    // it, and it must be read BEFORE we write presence.
+    // Their existing standing, if any — role and host-mute must survive a
+    // reconnect, or a muted user could clear it by rejoining.
     const existing = await this.ports.presence.getMember(roomId, user.id);
-    const isNewArrival = existing === null;
 
     const role = existing?.role ?? initialRole(room.hostUserId === user.id);
     const now = this.ports.clock.now();
 
     // 1. Live presence — the source of truth for "who is here".
-    await this.ports.presence.setOnline({
+    //
+    //    `setOnline` REPORTS whether it made them newly present, and that
+    //    answer is what decides whether the room is told. Reading presence
+    //    first and comparing would be a check-then-act race: a double-tapped
+    //    join fires several times before any has written, and every one of
+    //    them would believe it was the first.
+    const isNewArrival = await this.ports.presence.setOnline({
       userId: user.id,
       roomId,
       role,

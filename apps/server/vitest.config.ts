@@ -13,7 +13,15 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     name: 'unit',
-    include: ['tests/domain/**/*.test.ts', 'tests/app/**/*.test.ts', 'tests/memory/**/*.test.ts'],
+    include: [
+      'tests/domain/**/*.test.ts',
+      'tests/app/**/*.test.ts',
+      'tests/memory/**/*.test.ts',
+      // A REAL Socket.io server, in-process, over the memory fakes. It needs no
+      // Docker, so it belongs in the fast gate — and it is the only suite that
+      // exercises the socket edge, where unhandled rejections kill the process.
+      'tests/socket/**/*.test.ts',
+    ],
     environment: 'node',
     testTimeout: 10_000,
   },

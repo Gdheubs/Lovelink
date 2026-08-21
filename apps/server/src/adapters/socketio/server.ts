@@ -28,6 +28,27 @@ import { registerRoomHandlers } from './handlers/registerHandlers.js';
  * about permissions, that `if` is in the wrong ring.
  */
 
+/**
+ * Transport-level payload ceiling.
+ *
+ * TWO LAYERS, ANSWERING DIFFERENT QUESTIONS:
+ *
+ *   THE SCHEMA (handlers/schemas.ts) caps a chat message at 2000 characters and
+ *   a report note at 4000. Anything over that is rejected WITH AN ERROR EVENT
+ *   the client can show the user.
+ *
+ *   THIS LIMIT is an order of magnitude higher, and exceeding it closes the
+ *   connection before any application code runs. That is the right answer to a
+ *   payload no legitimate client sends — but it is INVISIBLE to the client,
+ *   which cannot tell it from a network failure.
+ *
+ * The gap between the two is therefore deliberate and load-bearing: it must be
+ * wide enough that every realistic mistake — a pasted essay, a runaway loop
+ * building a string — lands in the schema's territory and gets a real error
+ * message, leaving only genuinely abusive traffic to hit the silent guard.
+ */
+export const SOCKET_MAX_PAYLOAD_BYTES = 32 * 1024;
+
 export interface SocketServerDeps {
   readonly config: Config;
   readonly ports: Ports;
@@ -64,7 +85,7 @@ export function createSocketServer(httpServer: HttpServer, deps: SocketServerDep
     pingInterval: 20_000,
     pingTimeout: 25_000,
     // Bodies here are chat messages. Same reasoning as the HTTP body limit.
-    maxHttpBufferSize: 32 * 1024,
+    maxHttpBufferSize: SOCKET_MAX_PAYLOAD_BYTES,
   });
 
   const transport = new SocketIoTransport(io, ports.logger);
@@ -126,15 +147,26 @@ export function createSocketServer(httpServer: HttpServer, deps: SocketServerDep
     const log = ports.logger.child({ socketId: socket.id, userId: session.userId });
     log.debug({}, 'socket connected');
 
-    // Room, presence and chat. Phase 3 adds hand-raise and speaker handlers,
-    // Phase 4 host moderation, Phase 5 DMs and calls — all registered here so
-    // the complete list of what a client may ask for stays readable in one place.
-    registerRoomHandlers({ ports, useCases: deps.useCases, socket, session });
-
+    /**
+     * ORDER MATTERS: this disconnect listener is registered BEFORE the room
+     * handlers register theirs, and Socket.io invokes them in registration
+     * order.
+     *
+     * The room cleanup needs to know whether this user has any OTHER live
+     * connection, so that closing one of two tabs does not evict them from a
+     * room the other tab is still showing. That question can only be answered
+     * correctly once this socket has been taken out of the registry — hence
+     * unregistering first.
+     */
     socket.on('disconnect', (reason) => {
       transport.unregister(session.userId, socket);
       log.debug({ reason }, 'socket disconnected');
     });
+
+    // Room, presence and chat. Phase 3 adds hand-raise and speaker handlers,
+    // Phase 4 host moderation, Phase 5 DMs and calls — all registered here so
+    // the complete list of what a client may ask for stays readable in one place.
+    registerRoomHandlers({ ports, useCases: deps.useCases, socket, session });
   });
 
   return {

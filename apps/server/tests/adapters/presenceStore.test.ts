@@ -88,6 +88,45 @@ describe.skipIf(!available)('PresenceStore contract', () => {
         expect(await store.countRoomMembers(room)).toBe(1);
       });
 
+      describe('setOnline reports whether the arrival was new', () => {
+        // This boolean is what decides whether the room is told `user:joined`.
+        // If the two implementations disagree, an impatient double-tap
+        // announces once in tests and five times in production.
+
+        it('is true the first time and false on a refresh', async () => {
+          expect(await join()).toBe(true);
+          expect(await join()).toBe(false);
+          expect(await join()).toBe(false);
+        });
+
+        it('is true again after the entry has lapsed', async () => {
+          // The room was told they left, so coming back is a real arrival.
+          expect(await join()).toBe(true);
+          clock.advanceSeconds(TTL_SECONDS + 1);
+          expect(await join()).toBe(true);
+        });
+
+        it('is true again after an explicit setOffline', async () => {
+          expect(await join()).toBe(true);
+          await store.setOffline(room, alice);
+          expect(await join()).toBe(true);
+        });
+
+        it('is per (room, user), not per user', async () => {
+          expect(await join(alice, room)).toBe(true);
+          // Same person, different room: still a new arrival there.
+          expect(await join(alice, otherRoom)).toBe(true);
+          expect(await join(alice, room)).toBe(false);
+        });
+
+        it('reports one winner when several joins race', async () => {
+          // The check-then-act race, run for real. Exactly one caller may be
+          // told it was the arrival.
+          const results = await Promise.all(Array.from({ length: 8 }, () => join()));
+          expect(results.filter(Boolean)).toHaveLength(1);
+        });
+      });
+
       it('removes a member on setOffline', async () => {
         await join();
         await store.setOffline(room, alice);

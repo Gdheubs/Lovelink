@@ -42,6 +42,38 @@ export interface HandlerContext {
 }
 
 /**
+ * Per-socket serialization.
+ *
+ * THE BUG THIS FIXES
+ * ------------------
+ * Socket.io delivers a client's events in the order they were sent, but our
+ * handlers are async — so their EFFECTS interleave freely. A client that emits
+ * `room:join` and then `room:leave` can have the leave complete first: it finds
+ * no presence to remove, does nothing, and then the join writes presence. The
+ * user is now in a room they explicitly left, and nothing looks wrong anywhere.
+ *
+ * That is not one bug, it is a shape of bug — join/leave, raise/lower,
+ * request/accept, and every future pair have the same hazard.
+ *
+ * So each socket gets a queue: events from ONE connection are processed one at
+ * a time, in arrival order. Different sockets still run concurrently, so this
+ * costs nothing in throughput — a single user's events are user-paced by
+ * definition, and a user who fires two in the same millisecond means the second
+ * to follow the first.
+ *
+ * A rejected handler must not poison the chain, hence the `.catch` — the
+ * wrapper below already reports errors to the client, and this only keeps the
+ * queue moving.
+ */
+const socketQueues = new WeakMap<Socket, Promise<void>>();
+
+function enqueue(socket: Socket, task: () => Promise<void>): void {
+  const previous = socketQueues.get(socket) ?? Promise.resolve();
+  const next = previous.then(task).catch(() => undefined);
+  socketQueues.set(socket, next);
+}
+
+/**
  * Wire every Phase 2 event onto a freshly-connected socket.
  *
  * Later phases add their handlers here. Keeping registration in one function
@@ -120,6 +152,24 @@ export function registerRoomHandlers(context: HandlerContext): void {
   socket.on('disconnect', () => {
     void (async () => {
       try {
+        // PRESENCE IS PER USER; DISCONNECT IS PER SOCKET.
+        //
+        // Someone with two tabs open who closes one is still in the room — the
+        // other tab is still rendering it. Cleaning up here unconditionally
+        // makes them vanish from everyone else's member list while their own
+        // screen still shows them present.
+        //
+        // The transport has already removed this socket from the registry (see
+        // the ordering note in server.ts), so a `true` here means a genuinely
+        // separate connection is still open.
+        if (await ports.realtime.isUserConnected(session.userId)) {
+          ports.logger.debug(
+            { userId: session.userId },
+            'socket closed but the user has another connection; keeping presence',
+          );
+          return;
+        }
+
         const rooms = await ports.presence.getRoomsForUser(session.userId);
         for (const roomId of rooms) {
           await useCases.leaveRoom.execute({
@@ -176,7 +226,9 @@ function on<E extends SocketEventName>(
   };
 
   listen.on(event, (rawPayload: unknown) => {
-    void (async () => {
+    // Queued rather than fired: see `enqueue` for why a client's events must
+    // take effect in the order they were sent.
+    enqueue(socket, async () => {
       const log = ports.logger.child({ socketId: socket.id, userId: session.userId, event });
 
       // (a) shape.
@@ -227,6 +279,6 @@ function on<E extends SocketEventName>(
           message: 'Something went wrong on our side. Please try again.',
         });
       }
-    })();
+    });
   });
 }

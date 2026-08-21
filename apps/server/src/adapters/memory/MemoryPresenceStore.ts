@@ -44,17 +44,22 @@ export class MemoryPresenceStore implements PresenceStore {
     return map;
   }
 
-  async setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<void> {
+  async setOnline(entry: Omit<PresenceEntry, 'lastSeenMs' | 'handRaisedAtMs'>): Promise<boolean> {
+    // --- atomic section: no await between the read and the write ---
     const map = this.roomMap(entry.roomId);
     const existing = map.get(entry.userId);
+    const wasPresent = existing !== undefined && this.isLive(existing);
+
     map.set(entry.userId, {
       ...entry,
       lastSeenMs: this.clock.nowMs(),
       // Re-joining does not silently keep a stale raised hand from a previous
       // session, but a heartbeat-refreshed rejoin within the same session does.
-      handRaisedAtMs:
-        existing !== undefined && this.isLive(existing) ? existing.handRaisedAtMs : null,
+      handRaisedAtMs: wasPresent ? (existing?.handRaisedAtMs ?? null) : null,
     });
+    // --- end atomic section ---
+
+    return !wasPresent;
   }
 
   async setOffline(roomId: RoomId, userId: UserId): Promise<void> {
