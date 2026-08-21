@@ -56,7 +56,7 @@ async function main(): Promise<void> {
 
   const container = await createContainer({ config, logger });
   const { ports } = container;
-  const useCases = createUseCases();
+  const useCases = createUseCases(ports, { echoLoginCode: config.AUTH_ECHO_CODE });
 
   // A bare HTTP server, existing only to carry the websocket upgrade and to
   // answer /healthz — this process has no REST surface of its own.

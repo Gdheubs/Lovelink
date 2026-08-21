@@ -2,7 +2,18 @@ import type { Config } from './config.js';
 import type { Logger } from './domain/ports/Logger.js';
 import type { Ports } from './domain/ports/index.js';
 import type { RealtimeTransport } from './domain/ports/RealtimeTransport.js';
+import { systemClock } from './domain/ports/Clock.js';
 import { createMemoryPorts } from './adapters/memory/index.js';
+import { CryptoIdGenerator } from './adapters/memory/MemoryIdGenerator.js';
+import { MemoryNotificationSender } from './adapters/memory/MemoryNotificationSender.js';
+import { JwtTokenService } from './adapters/auth/JwtTokenService.js';
+import { createDatabase } from './adapters/postgres/db.js';
+import { PostgresUserRepository } from './adapters/postgres/PostgresUserRepository.js';
+import { createRedisClient } from './adapters/redis/client.js';
+import { RedisAuthChallengeStore } from './adapters/redis/RedisAuthChallengeStore.js';
+import { RedisEventBus } from './adapters/redis/RedisEventBus.js';
+import { RedisMetrics } from './adapters/redis/RedisMetrics.js';
+import { RedisRateLimiter } from './adapters/redis/RedisRateLimiter.js';
 
 /**
  * Adapter selection — half of the composition root.
@@ -17,7 +28,7 @@ import { createMemoryPorts } from './adapters/memory/index.js';
  *
  * `PERSISTENCE=memory` is not a database toggle. It replaces EVERY port with an
  * in-process fake, which is what lets `npm run dev:memory` boot the whole
- * product — signup, rooms, chat, surprises — with no Docker at all.
+ * product with no Docker at all.
  */
 
 /** Ports with the `readonly` stripped, so the container alone can mutate them. */
@@ -48,43 +59,165 @@ export interface Container {
 }
 
 export async function createContainer(options: ContainerOptions): Promise<Container> {
-  const { config, logger } = options;
+  return options.config.PERSISTENCE === 'memory'
+    ? createMemoryContainer(options)
+    : createProductionContainer(options);
+}
 
-  if (config.PERSISTENCE === 'memory') {
-    const memory = createMemoryPorts({
-      // Wall-clock time and crypto ids: `dev:memory` is a real developer
-      // experience, not a test fixture. Only the TESTS want determinism.
-      deterministic: false,
+// ---------------------------------------------------------------------------
+// Memory
+// ---------------------------------------------------------------------------
+
+function createMemoryContainer({ config, logger }: ContainerOptions): Container {
+  const memory = createMemoryPorts({
+    // Wall-clock time and crypto ids: `dev:memory` is a real developer
+    // experience, not a test fixture. Only the TESTS want determinism.
+    deterministic: false,
+    logger,
+    presenceTtlSeconds: config.PRESENCE_TTL_SECONDS,
+    accessTokenTtlSeconds: config.ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlSeconds: config.REFRESH_TOKEN_TTL_SECONDS,
+    // Config already refuses AUTH_ECHO_CODE in production, so this cannot
+    // print a real user's login code.
+    echoLoginCodes: config.AUTH_ECHO_CODE,
+  });
+
+  const ports: MutablePorts = { ...memory };
+
+  logger.warn(
+    { persistence: 'memory' },
+    'running with IN-MEMORY adapters: all data is lost on restart',
+  );
+
+  return {
+    ports,
+    attachRealtime(transport) {
+      ports.realtime = transport;
+    },
+    async shutdown() {
+      await memory.bus.close();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Postgres + Redis
+// ---------------------------------------------------------------------------
+
+async function createProductionContainer({ config, logger }: ContainerOptions): Promise<Container> {
+  const clock = systemClock;
+  const ids = new CryptoIdGenerator();
+
+  // -- Redis: three connections, because a subscriber cannot run commands ----
+  const redis = createRedisClient({ url: config.REDIS_URL, logger }, 'commands');
+  const redisPublisher = createRedisClient({ url: config.REDIS_URL, logger }, 'publisher');
+  const redisSubscriber = createRedisClient({ url: config.REDIS_URL, logger }, 'subscriber');
+
+  // -- Postgres --------------------------------------------------------------
+  const db = createDatabase({
+    connectionString: config.DATABASE_URL,
+    poolMax: config.DATABASE_POOL_MAX,
+    logger,
+  });
+
+  /**
+   * PHASE BOUNDARY — read this before assuming a port is production-backed.
+   *
+   * Phase 1 delivers identity. The ports below it in the build order do not
+   * have real adapters yet, so they fall back to the in-memory fakes. That is
+   * deliberate and phase-appropriate (see docs/architecture.md §6), but it MUST
+   * be loud: a room created in this mode disappears on restart.
+   *
+   * As each phase lands, its adapters replace the corresponding lines here and
+   * the warning shrinks. When the list is empty, delete the fallback.
+   */
+  const pendingFallbacks = createMemoryPorts({
+    deterministic: false,
+    logger,
+    presenceTtlSeconds: config.PRESENCE_TTL_SECONDS,
+  });
+
+  const ports: MutablePorts = {
+    clock,
+    ids,
+    logger,
+
+    // -- Phase 1: real ------------------------------------------------------
+    users: new PostgresUserRepository(db),
+    tokens: new JwtTokenService(
+      redis,
+      clock,
+      ids,
+      {
+        secret: config.JWT_SECRET,
+        accessTtlSeconds: config.ACCESS_TOKEN_TTL_SECONDS,
+        refreshTtlSeconds: config.REFRESH_TOKEN_TTL_SECONDS,
+      },
       logger,
-      presenceTtlSeconds: config.PRESENCE_TTL_SECONDS,
-      accessTokenTtlSeconds: config.ACCESS_TOKEN_TTL_SECONDS,
-      refreshTokenTtlSeconds: config.REFRESH_TOKEN_TTL_SECONDS,
-      // Config already refuses AUTH_ECHO_CODE in production, so this cannot
-      // print a real user's login code.
-      echoLoginCodes: config.AUTH_ECHO_CODE,
-    });
+    ),
+    challenges: new RedisAuthChallengeStore(redis),
+    rateLimiter: new RedisRateLimiter(redis),
+    metrics: new RedisMetrics(redis, clock, logger),
+    bus: new RedisEventBus(redisPublisher, redisSubscriber, logger),
 
-    const ports: MutablePorts = { ...memory };
+    // Console-logging sender until a real SMS/email provider is configured.
+    // It reports success without sending, so a login code appears only in the
+    // server log — usable on a private VPS, never acceptable for public signup.
+    notifications: new MemoryNotificationSender(logger, config.AUTH_ECHO_CODE),
 
-    logger.warn(
-      { persistence: 'memory' },
-      'running with IN-MEMORY adapters: all data is lost on restart',
+    // -- Awaiting their phase: in-memory ------------------------------------
+    presence: pendingFallbacks.presence, // Phase 2
+    rooms: pendingFallbacks.rooms, // Phase 2
+    messages: pendingFallbacks.messages, // Phase 2
+    media: pendingFallbacks.media, // Phase 3
+    reports: pendingFallbacks.reports, // Phase 4
+    relationships: pendingFallbacks.relationships, // Phase 5
+    surprises: pendingFallbacks.surprises, // Phase 5
+
+    // Replaced by attachRealtime once the socket server exists.
+    realtime: pendingFallbacks.realtime,
+  };
+
+  logger.warn(
+    {
+      inMemoryPorts: [
+        'presence',
+        'rooms',
+        'messages',
+        'media',
+        'reports',
+        'relationships',
+        'surprises',
+      ],
+    },
+    'some ports are still in-memory pending their build phase: that data is lost on restart',
+  );
+
+  // Fail at boot rather than on the first user's request. A database that is
+  // unreachable at startup is almost always a misconfiguration, and finding out
+  // now beats finding out from a 500.
+  if (!(await db.ping())) {
+    throw new Error(
+      `Cannot reach Postgres at the configured DATABASE_URL. Is docker compose up? Have you run npm run migrate?`,
     );
-
-    return {
-      ports,
-      attachRealtime(transport) {
-        ports.realtime = transport;
-      },
-      async shutdown() {
-        await memory.bus.close();
-      },
-    };
   }
 
-  // Phase 1 wires the Postgres and Redis adapters in here. Until then, failing
-  // loudly beats silently falling back to memory and losing a user's data.
-  throw new Error(
-    `PERSISTENCE=${config.PERSISTENCE} is not wired up yet. Use PERSISTENCE=memory (npm run dev:memory).`,
-  );
+  logger.info({ persistence: 'postgres' }, 'connected to postgres and redis');
+
+  return {
+    ports,
+    attachRealtime(transport) {
+      ports.realtime = transport;
+    },
+    async shutdown() {
+      // Reverse order of acquisition: stop listening, then close the pools.
+      await ports.bus.close().catch(() => undefined);
+      await Promise.allSettled([
+        redis.quit(),
+        redisPublisher.quit(),
+        redisSubscriber.quit(),
+        db.close(),
+      ]);
+    },
+  };
 }

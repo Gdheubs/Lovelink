@@ -26,7 +26,11 @@ services:
       # developer's machine and the server.
       POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-US --encoding=UTF8'
     ports:
-      - '5432:5432'
+      # Host port is configurable: a machine running several stacks will already
+      # have 5432 taken, and a port clash at 'compose up' is a confusing first
+      # experience. The container port never changes, so DATABASE_URL inside the
+      # compose network is unaffected.
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -45,7 +49,7 @@ services:
     # debugging confusing, and in production it briefly resets every rate limit.
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - '6379:6379'
+      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - redis-data:/data
     healthcheck:

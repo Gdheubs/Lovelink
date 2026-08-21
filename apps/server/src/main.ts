@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const { ports } = container;
 
   // 4. Use cases.
-  const useCases = createUseCases();
+  const useCases = createUseCases(ports, { echoLoginCode: config.AUTH_ECHO_CODE });
 
   // 5. HTTP edge.
   const app = await createHttpServer({ config, ports, useCases });

@@ -1,5 +1,48 @@
 import { z } from 'zod';
 
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Load `.env` into `process.env`, if one exists.
+ *
+ * WHY NO `dotenv` PACKAGE: Node has done this natively since 20.6, and a
+ * dependency whose entire job the runtime already performs is a dependency to
+ * audit, update and eventually be surprised by.
+ *
+ * WHY TWO CANDIDATE PATHS: this is a monorepo, and `.env` lives at the ROOT
+ * while the server's own scripts run with a cwd of `apps/server`. Looking only
+ * at the cwd means `npm run dev` from the repo root works and
+ * `npm run dev --workspace @loverlink/server` silently does not — a difference
+ * that presents as "my database settings are being ignored" and costs an hour.
+ * So we try the cwd first (a deployment may put `.env` beside the process),
+ * then the repo root.
+ *
+ * WHY IT IS BEST-EFFORT: a missing `.env` is the NORMAL case in production and
+ * in CI, where variables come from the environment itself. A malformed file is
+ * caught by the validation below, which produces a far more useful message
+ * than a parse error would.
+ *
+ * IMPORTANT: real environment variables always win. `loadEnvFile` does not
+ * overwrite values already present, so `PORT=5000 npm run dev` beats whatever
+ * `.env` says — which is what anyone typing that expects.
+ */
+function loadDotEnvIfPresent(): void {
+  // src/config.ts -> src -> apps/server -> apps -> <repo root>
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+  for (const candidate of [join(process.cwd(), '.env'), join(repoRoot, '.env')]) {
+    try {
+      process.loadEnvFile(candidate);
+      return;
+    } catch {
+      // Not there, or unreadable. Try the next one; the schema has the last word.
+    }
+  }
+}
+
+loadDotEnvIfPresent();
+
 /**
  * Environment configuration — validated once, at boot, loudly.
  *

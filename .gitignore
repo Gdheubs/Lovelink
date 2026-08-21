@@ -12,3 +12,6 @@ coverage/
 *.log
 .livekit/
 docker-data/
+
+# Local environment (never commit)
+.env
