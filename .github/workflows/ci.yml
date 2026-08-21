@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The fast gate. Runs on every push, needs no services, and must stay under a
+  # minute — a slow required check is one people learn to ignore.
+  # ---------------------------------------------------------------------------
+  check:
+    name: format · lint · typecheck · unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run ci
+
+  # ---------------------------------------------------------------------------
+  # Adapter tests against the real services.
+  #
+  # These are SEPARATE from the fast gate on purpose: a contributor without
+  # Docker can still run `npm run ci` locally and get a meaningful green, while
+  # CI still proves the adapters actually satisfy their ports. Locally each
+  # suite skips itself when its service is unreachable; here the services are
+  # started first, so nothing is skipped.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: adapter integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: loverlink
+          POSTGRES_PASSWORD: loverlink
+          POSTGRES_DB: loverlink
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U loverlink -d loverlink"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://loverlink:loverlink@localhost:5432/loverlink
+      REDIS_URL: redis://localhost:6379
+      PERSISTENCE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run migrate
+      - run: npm run test:integration
+
+  # ---------------------------------------------------------------------------
+  # Proves the Phase 0 promise: the whole app boots with no external services.
+  #
+  # This is not a smoke test of features — it is a structural check. If a vendor
+  # import ever leaks into the domain or application ring, memory mode stops
+  # working and this job is what notices.
+  # ---------------------------------------------------------------------------
+  memory-boot:
+    name: boots with zero external services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: boot in memory mode and probe health
+        run: |
+          PERSISTENCE=memory PORT=4000 npx tsx apps/server/src/main.ts &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:4000/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:4000/healthz | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -sf http://127.0.0.1:4000/readyz  | tee /dev/stderr | grep -q '"status":"ready"'
+          kill $SERVER_PID

@@ -1,0 +1,95 @@
+# =============================================================================
+# Loverlink — the whole stack on one machine.
+#
+#   docker compose up -d          postgres + redis (what Phase 0-2 need)
+#   docker compose --profile media up -d    ... plus LiveKit and coturn (Phase 3)
+#
+# The media services are behind a profile deliberately: Phases 0 to 2 build and
+# prove the realtime backbone with NO media complexity, and a developer working
+# on chat should not have to run an SFU to do it.
+#
+# The app itself is not containerised here. It runs on the host during
+# development (`npm run dev`), which keeps hot reload fast. Production uses the
+# same compose file plus docker-compose.prod.yml.
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: loverlink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: loverlink
+      POSTGRES_PASSWORD: loverlink
+      POSTGRES_DB: loverlink
+      # Deterministic collation, so ORDER BY does not differ between a
+      # developer's machine and the server.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-US --encoding=UTF8'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # The app waits on this, so it must test a real query, not just the port.
+      test: ['CMD-SHELL', 'pg_isready -U loverlink -d loverlink']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: loverlink-redis
+    restart: unless-stopped
+    # appendonly keeps presence and rate limits across a restart. Losing them is
+    # survivable (presence self-heals via heartbeat) but it makes local
+    # debugging confusing, and in production it briefly resets every rate limit.
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: loverlink-livekit
+    profiles: ['media']
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./infra/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '7880:7880' # signalling (websocket + HTTP API)
+      - '7881:7881' # TCP fallback for WebRTC, for networks that block UDP
+      - '50000-50100:50000-50100/udp' # RTP media
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # TURN relay. Required for the Phase 3 exit criterion — "works on real phones
+  # over mobile data" — because carrier-grade NAT defeats direct connections and
+  # a meaningful share of mobile users cannot connect without a relay.
+  coturn:
+    image: coturn/coturn:latest
+    container_name: loverlink-coturn
+    profiles: ['media']
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --min-port=50200
+      - --max-port=50300
+      - --realm=loverlink.online
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:-dev-turn-secret}
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+
+volumes:
+  postgres-data:
+  redis-data:
