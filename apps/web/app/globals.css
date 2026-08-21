@@ -1,0 +1,384 @@
+/*
+ * Loverlink visual language.
+ *
+ * Dark by default, and not as a style preference: the product's anchor use case
+ * is a late-night talk room on a phone in a dark bedroom. A bright screen at 2am
+ * is a reason to close the app.
+ *
+ * Everything is a token so that Phase 6's polish pass is a change to this block
+ * rather than a hunt through components.
+ */
+
+:root {
+  --bg: #100a18;
+  --bg-raised: #191024;
+  --bg-input: #201530;
+  --border: #2f2140;
+  --border-strong: #43305c;
+
+  --text: #f4eefb;
+  --text-muted: #a996bd;
+  --text-faint: #6f5f83;
+
+  --accent: #d98cae;
+  --accent-strong: #c4527d;
+  --accent-soft: rgba(217, 140, 174, 0.12);
+
+  --danger: #e06b7f;
+  --success: #6bc4a0;
+
+  --radius: 14px;
+  --radius-lg: 22px;
+
+  /* Safe areas matter: this is a PWA that runs full-screen on notched phones. */
+  --page-padding: 1.25rem;
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  /* Stops iOS bouncing the whole page when a scrollable area hits its end. */
+  overscroll-behavior-y: none;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(var(--page-padding), env(safe-area-inset-top)) var(--page-padding)
+    max(var(--page-padding), env(safe-area-inset-bottom));
+}
+
+.page--centered {
+  justify-content: center;
+  align-items: center;
+}
+
+.stack {
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.brand__mark {
+  font-size: 1.75rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.brand__tagline {
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: 0.4rem;
+}
+
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.6rem;
+}
+
+.card + .card {
+  margin-top: 1rem;
+}
+
+.card__title {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 1.1rem;
+}
+
+/* ------------------------------------------------------------------- forms */
+
+.field {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.field__label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.field__hint {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  margin-top: 0.35rem;
+}
+
+.input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  /* 16px minimum: anything smaller makes iOS Safari zoom on focus. */
+  font-size: 1rem;
+  font-family: inherit;
+  padding: 0.78rem 0.95rem;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  background: #26193a;
+}
+
+.input--code {
+  text-align: center;
+  letter-spacing: 0.45em;
+  font-size: 1.4rem;
+  padding-left: 1.4rem;
+}
+
+/* ----------------------------------------------------------------- buttons */
+
+.button {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.85rem;
+  cursor: pointer;
+  transition:
+    opacity 0.15s ease,
+    transform 0.1s ease;
+  /* 44px minimum touch target. */
+  min-height: 44px;
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: linear-gradient(135deg, var(--accent-strong), #8d2f56);
+  color: #fff;
+}
+
+.button--secondary {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--accent);
+}
+
+.button--ghost {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  text-decoration: underline;
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  min-height: auto;
+  width: auto;
+}
+
+.button--ghost:hover {
+  color: var(--accent);
+}
+
+.button + .button {
+  margin-top: 0.65rem;
+}
+
+/* --------------------------------------------------------------- messaging */
+
+.notice {
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.notice--error {
+  background: rgba(224, 107, 127, 0.12);
+  border: 1px solid rgba(224, 107, 127, 0.35);
+  color: var(--danger);
+}
+
+.notice--info {
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.notice--dev {
+  background: rgba(107, 196, 160, 0.1);
+  border: 1px dashed rgba(107, 196, 160, 0.4);
+  color: var(--success);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* ---------------------------------------------------------------- profile */
+
+.avatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.profile-head__name {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.tier-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-top: 0.3rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row__label {
+  color: var(--text-muted);
+}
+
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.ledger__item:last-child {
+  border-bottom: none;
+}
+
+.ledger__delta {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.ledger__delta--positive {
+  color: var(--success);
+}
+
+.ledger__delta--negative {
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------- misc */
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.faint {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.center {
+  text-align: center;
+}
+
+.spinner {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respect the OS setting. Vestibular disorders are common and an animation
+   that cannot be turned off is an accessibility failure, not a flourish. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -15,3 +15,6 @@ docker-data/
 
 # Local environment (never commit)
 .env
+.next/
+apps/web/.env.local
+next-env.d.ts

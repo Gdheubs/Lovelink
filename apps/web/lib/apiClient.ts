@@ -1,0 +1,290 @@
+/**
+ * THE ONLY MODULE IN THE FRONTEND THAT CALLS `fetch`.
+ *
+ * WHY THAT RULE EXISTS
+ * --------------------
+ * Scattering fetch calls through components means every one of them
+ * re-implements: the base URL, error shape parsing, the Authorization header,
+ * and — the expensive one — token refresh. The fourth is what makes this
+ * non-negotiable: when an access token expires mid-session, exactly one place
+ * should notice, refresh, and retry. Twenty places noticing produces twenty
+ * concurrent refresh calls, and because refresh tokens ROTATE, nineteen of them
+ * fail and log the user out.
+ *
+ * So: components call typed functions from here. Nothing else touches the
+ * network. The socket equivalent is `realtimeClient.ts`; the LiveKit browser
+ * SDK is confined to `mediaClient.ts`. Three files, three boundaries — the same
+ * shape as the server's adapters, for the same reason.
+ */
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
+
+// ---------------------------------------------------------------------------
+// Token storage
+// ---------------------------------------------------------------------------
+
+/**
+ * The access token lives in MEMORY, not localStorage.
+ *
+ * localStorage is readable by any script on the page, so a single XSS bug — or
+ * one compromised dependency — hands over a valid session. Memory is cleared on
+ * reload, which is why the REFRESH token is an httpOnly cookie the server set:
+ * JavaScript cannot read it, and it is what restores the session on load.
+ *
+ * The cost is one refresh round-trip when a tab opens. That is the right trade.
+ */
+let accessToken: string | null = null;
+
+/** Notified when auth state changes, so the AuthProvider can re-render. */
+type AuthListener = (token: string | null) => void;
+const listeners = new Set<AuthListener>();
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+  for (const listener of listeners) listener(token);
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function onAuthChange(listener: AuthListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/** The server's error envelope, preserved so the UI can branch on `code`. */
+export class ApiError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  /** The account needs a name and date of birth before it can be created. */
+  get needsRegistration(): boolean {
+    return this.code === 'VALIDATION_FAILED' && this.details?.registrationRequired === true;
+  }
+
+  get isUnauthenticated(): boolean {
+    return this.code === 'UNAUTHENTICATED';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The request pipeline
+// ---------------------------------------------------------------------------
+
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  /** Skip the refresh-and-retry dance. Used by refresh itself, to avoid a loop. */
+  skipRefresh?: boolean;
+}
+
+/**
+ * A single in-flight refresh, shared by every caller that needs one.
+ *
+ * This is the whole reason token handling is centralised. Without it, five
+ * requests failing at once trigger five refreshes; rotation means only the
+ * first succeeds and the other four invalidate the session they were trying to
+ * save. Sharing one promise turns a stampede into one call.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // Sends the httpOnly refresh cookie. Requires the server's CORS to
+        // allow credentials against an explicit origin.
+        credentials: 'include',
+        body: '{}',
+      });
+
+      if (!response.ok) {
+        setAccessToken(null);
+        return false;
+      }
+
+      const data = (await response.json()) as { accessToken: string };
+      setAccessToken(data.accessToken);
+      return true;
+    } catch {
+      setAccessToken(null);
+      return false;
+    } finally {
+      // Cleared in `finally` so a failed refresh does not wedge every future
+      // attempt behind a permanently-rejected promise.
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, skipRefresh = false } = options;
+
+  const send = async (): Promise<Response> => {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (accessToken !== null) headers.authorization = `Bearer ${accessToken}`;
+
+    return fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      credentials: 'include',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  };
+
+  let response = await send();
+
+  // ONE retry, and only for an expired session. Retrying other failures would
+  // duplicate side effects; retrying more than once risks a loop.
+  if (response.status === 401 && !skipRefresh) {
+    if (await refreshAccessToken()) {
+      response = await send();
+    }
+  }
+
+  if (response.status === 204) return undefined as T;
+
+  const text = await response.text();
+  const payload: unknown = text.length > 0 ? JSON.parse(text) : {};
+
+  if (!response.ok) {
+    const envelope = payload as {
+      error?: { code?: string; message?: string; details?: Record<string, unknown> };
+    };
+    throw new ApiError(
+      envelope.error?.code ?? 'INTERNAL',
+      envelope.error?.message ?? 'Something went wrong. Please try again.',
+      response.status,
+      envelope.error?.details,
+    );
+  }
+
+  return payload as T;
+}
+
+// ---------------------------------------------------------------------------
+// Typed endpoints
+// ---------------------------------------------------------------------------
+
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  avatarSeed: string;
+  tier: 'restricted' | 'newcomer' | 'regular' | 'trusted';
+}
+
+export interface MyProfile {
+  id: string;
+  displayName: string;
+  avatarSeed: string;
+  identifierMasked: string;
+  identifierKind: 'phone' | 'email';
+  status: string;
+  trustScore: number;
+  tier: PublicProfile['tier'];
+  memberSince: string;
+  trustHistory: { delta: number; reason: string; at: string }[];
+}
+
+interface AuthResponse {
+  accessToken: string;
+  accessExpiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
+  profile: PublicProfile;
+  isNewAccount: boolean;
+}
+
+export const api = {
+  /**
+   * Ask for a login code.
+   *
+   * `devCode` is populated only when the server has AUTH_ECHO_CODE on, which is
+   * refused in production. The sign-in screen shows it so local development
+   * needs no SMS provider.
+   */
+  async requestLoginCode(identifier: string): Promise<{
+    identifierKind: 'phone' | 'email';
+    devCode: string | null;
+  }> {
+    return request('/auth/request-code', { method: 'POST', body: { identifier } });
+  },
+
+  /**
+   * Verify the code. Logs in if the account exists, registers if it does not —
+   * which is why `displayName` and `dob` are optional here, exactly as the
+   * server's single endpoint expects.
+   *
+   * Throws an ApiError with `needsRegistration` when the identifier is new and
+   * those fields were not supplied.
+   */
+  async verifyLoginCode(input: {
+    identifier: string;
+    code: string;
+    displayName?: string;
+    dob?: string;
+  }): Promise<AuthResponse> {
+    const result = await request<AuthResponse>('/auth/verify', {
+      method: 'POST',
+      body: input,
+      // A 401 here means the code was wrong, not that the session expired.
+      // Refreshing would be nonsense.
+      skipRefresh: true,
+    });
+    setAccessToken(result.accessToken);
+    return result;
+  },
+
+  /**
+   * Restore a session on page load using the httpOnly refresh cookie.
+   * Returns false when there is no live session — the normal case for a first
+   * visit, so it must not be treated as an error.
+   */
+  async restoreSession(): Promise<boolean> {
+    return refreshAccessToken();
+  },
+
+  async logout(allDevices = false): Promise<void> {
+    try {
+      await request('/auth/logout', { method: 'POST', body: { allDevices } });
+    } finally {
+      // Cleared even if the call failed: the user asked to sign out, and
+      // leaving them apparently-signed-in because the network blipped is worse
+      // than a token that expires on its own.
+      setAccessToken(null);
+    }
+  },
+
+  async getMyProfile(): Promise<MyProfile> {
+    return request('/me');
+  },
+
+  async updateMyProfile(changes: {
+    displayName?: string;
+    regenerateAvatar?: boolean;
+  }): Promise<PublicProfile> {
+    return request('/me', { method: 'PATCH', body: changes });
+  },
+
+  async health(): Promise<{ status: string; persistence: string }> {
+    return request('/healthz');
+  },
+};
+
+export { API_BASE_URL };

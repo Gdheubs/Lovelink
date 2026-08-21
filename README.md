@@ -59,6 +59,21 @@ docker compose --profile media up -d   # + livekit + coturn
 | `npm run lint`             | ESLint, including the architecture boundary rules.    |
 | `npm run format`           | Prettier, write.                                      |
 
+## Build status
+
+| Phase | Scope                                                     | State                |
+| ----- | --------------------------------------------------------- | -------------------- |
+| 0     | Skeleton, ports, memory fakes, migrations, CI             | done                 |
+| 1     | Identity: signup with 18+ gate, login, sessions, profiles | done (backend + web) |
+| 2     | Rooms with text chat, presence, reconnect                 | next                 |
+| 3     | Voice via LiveKit                                         |                      |
+| 4     | Safety and moderation                                     |                      |
+| 5     | Surprises and the trust ladder                            |                      |
+| 6     | Retention and polish                                      |                      |
+
+See [docs/architecture.md](docs/architecture.md#6-build-order) for the exit
+criteria of each phase.
+
 ## Layout
 
 ```

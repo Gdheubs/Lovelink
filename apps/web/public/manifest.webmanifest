@@ -1,0 +1,19 @@
+{
+  "name": "Loverlink",
+  "short_name": "Loverlink",
+  "description": "Drop into a room. Listen first. Talk when you are ready.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#100a18",
+  "theme_color": "#100a18",
+  "categories": ["social", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
