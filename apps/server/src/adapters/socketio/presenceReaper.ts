@@ -1,4 +1,5 @@
 import type { Ports } from '../../domain/ports/index.js';
+import type { UseCases } from '../../app/index.js';
 
 /**
  * The ghost sweeper.
@@ -7,41 +8,54 @@ import type { Ports } from '../../domain/ports/index.js';
  * ---------------
  * The hard part of presence is not joining, it is LEAVING. Phones lock, tunnels
  * collapse, browsers get killed by the OS, processes get OOM-killed — none of
- * which send a clean `room:leave`. Without a sweeper, a room's member list
- * accumulates people who are not there, which is both a bad product (you think
- * you are talking to twelve people and it is three) and a safety problem (a
- * host cannot moderate someone the system believes is present).
+ * which send a clean `room:leave`, and on mobile this is the MOST common way a
+ * session ends, not an edge case.
  *
- * HOW IT WORKS
- * ------------
- * PresenceStore entries expire unless refreshed by `presence:heartbeat`. This
- * loop asks the store which entries have lapsed and, for each, emits the
- * `user:left` that the vanished client never sent — so the rest of the room
- * sees them go.
+ * Without a sweeper, a room's member list accumulates people who are not there.
+ * That is both a bad product (you think you are talking to twelve people and it
+ * is three) and a safety problem (a host cannot moderate someone the system
+ * believes is present).
+ *
+ * WHY IT DELEGATES TO THE LeaveRoom USE CASE
+ * ------------------------------------------
+ * An earlier version of this file did its own cleanup — emit `user:left`, close
+ * the membership row, leave the channel. That was three of the four things
+ * `LeaveRoom` does, and the missing fourth was crediting the session to the
+ * trust ledger. The result was that everyone who left by timing out silently
+ * never earned standing, while everyone who pressed the button did.
+ *
+ * That is the general hazard with a background job: it quietly becomes a second,
+ * worse implementation of a path that already exists. So the reaper's only job
+ * is DETECTION — it finds who lapsed and hands each one to the same use case
+ * every other departure goes through.
  *
  * WHY A SWEEPER AND NOT PURE TTL
  * ------------------------------
- * TTL alone would make the entry disappear silently. Nobody would be told, and
- * every client's member list would drift until its next full snapshot. The
- * expiry removes the record; the sweep announces it.
+ * A native Redis TTL would delete the key and tell nobody. The room would never
+ * learn the person left; their name would just vanish from the next snapshot
+ * while every connected client's member list stayed wrong. The expiry removes
+ * the record; the sweep is what ANNOUNCES it.
  *
- * IDEMPOTENCE: `reapExpired` removes what it returns, so two overlapping sweeps
- * cannot double-announce the same departure.
+ * IDEMPOTENCE: `reapExpired` atomically claims what it returns, and `LeaveRoom`
+ * guards on the durable row, so two overlapping sweeps — or a sweep racing a
+ * real disconnect — cannot double-announce one departure.
  */
 export interface PresenceReaperDeps {
   readonly ports: Ports;
+  readonly useCases: UseCases;
   readonly intervalSeconds: number;
 }
 
 export function startPresenceReaper(deps: PresenceReaperDeps): () => void {
-  const { ports, intervalSeconds } = deps;
+  const { ports, useCases, intervalSeconds } = deps;
   const log = ports.logger.child({ component: 'presence-reaper' });
 
   let running = false;
 
   const sweep = async (): Promise<void> => {
-    // A slow sweep must not overlap itself: two concurrent passes would fight
-    // over the same entries and produce duplicate `user:left` events.
+    // A slow sweep must not overlap itself. `reapExpired` is atomic, so this is
+    // belt-and-braces — but a pile-up of overlapping sweeps under load is its
+    // own problem regardless of correctness.
     if (running) return;
     running = true;
 
@@ -50,24 +64,21 @@ export function startPresenceReaper(deps: PresenceReaperDeps): () => void {
       if (reaped.length === 0) return;
 
       for (const entry of reaped) {
-        await ports.realtime.emitToRoom(entry.roomId, 'user:left', {
-          roomId: entry.roomId,
+        // `reaped` rather than `disconnected` only so the logs distinguish
+        // them. Both are voluntary departures and both earn session credit.
+        await useCases.leaveRoom.execute({
           userId: entry.userId,
+          roomId: entry.roomId,
+          reason: 'reaped',
         });
-        await ports.realtime.leaveRoomChannel(entry.userId, entry.roomId);
 
-        // Close the durable membership row too, so `haveSharedRoomSession`
-        // sees a finite interval rather than one that never ends.
-        await ports.rooms.recordLeave(entry.roomId, entry.userId, ports.clock.now());
-
-        // Other processes may care (e.g. a host-departure handler).
+        // Other processes may care — a future host-departure handler, for
+        // instance. Published after the leave so subscribers see settled state.
         await ports.bus.publish('presence', {
           type: 'presence.reaped',
           userId: entry.userId,
           roomId: entry.roomId,
         });
-
-        ports.metrics.increment('room.left');
       }
 
       log.info({ count: reaped.length }, 'reaped stale presence entries');

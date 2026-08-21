@@ -17,7 +17,8 @@
     "test:watch": "vitest -c vitest.config.ts",
     "migrate": "tsx src/adapters/postgres/migrate.ts up",
     "migrate:status": "tsx src/adapters/postgres/migrate.ts status",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "room-check": "tsx scripts/roomLoadCheck.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

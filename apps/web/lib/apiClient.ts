@@ -202,6 +202,18 @@ export interface MyProfile {
   trustHistory: { delta: number; reason: string; at: string }[];
 }
 
+export interface RoomSummary {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  hostUserId: string;
+  status: string;
+  memberCount?: number;
+  maxSpeakers: number;
+  createdAt: string;
+}
+
 interface AuthResponse {
   accessToken: string;
   accessExpiresAt: string;
@@ -280,6 +292,25 @@ export const api = {
     regenerateAvatar?: boolean;
   }): Promise<PublicProfile> {
     return request('/me', { method: 'PATCH', body: changes });
+  },
+
+  // -- rooms ---------------------------------------------------------------
+
+  async listRooms(category?: string): Promise<{ rooms: RoomSummary[] }> {
+    const query = category === undefined ? '' : `?category=${encodeURIComponent(category)}`;
+    return request(`/rooms${query}`);
+  },
+
+  async createRoom(input: {
+    title: string;
+    category: string;
+    maxSpeakers?: number;
+  }): Promise<RoomSummary> {
+    return request('/rooms', { method: 'POST', body: input });
+  },
+
+  async getRoom(id: string): Promise<RoomSummary> {
+    return request(`/rooms/${encodeURIComponent(id)}`);
   },
 
   async health(): Promise<{ status: string; persistence: string }> {

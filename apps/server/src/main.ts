@@ -82,6 +82,7 @@ async function main(): Promise<void> {
     // without this, rooms slowly fill with people who are not there.
     stopReaper = startPresenceReaper({
       ports,
+      useCases,
       intervalSeconds: config.PRESENCE_REAP_INTERVAL_SECONDS,
     });
 

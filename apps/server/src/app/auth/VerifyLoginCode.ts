@@ -178,16 +178,34 @@ export class VerifyLoginCode {
     };
   }
 
+  /**
+   * Two limits, sized for what each actually defends.
+   *
+   * Per identifier is the brute-force control on a 6-digit code and is tight.
+   * Per IP is a blunt abuse cap and must stay generous, because a shared
+   * address (an office, a campus, carrier-grade NAT) carries many unrelated
+   * people — throttling it as hard as a single account would lock out everyone
+   * behind one router.
+   */
   private async enforceVerifyLimit(identifier: string, ip: string): Promise<void> {
-    for (const key of [`auth:verify:id:${identifier}`, `auth:verify:ip:${ip}`]) {
-      const result = await this.ports.rateLimiter.check(
-        key,
-        LIMITS.authVerify.limit,
-        LIMITS.authVerify.windowSec,
-      );
+    const checks = [
+      {
+        key: `auth:verify:id:${identifier}`,
+        spec: LIMITS.authVerify,
+        message: 'Too many attempts for that contact. Try again in a few minutes.',
+      },
+      {
+        key: `auth:verify:ip:${ip}`,
+        spec: LIMITS.authVerifyPerIp,
+        message: 'Too many sign-in attempts from this network. Try again in a few minutes.',
+      },
+    ];
+
+    for (const { key, spec, message } of checks) {
+      const result = await this.ports.rateLimiter.check(key, spec.limit, spec.windowSec);
       if (!result.allowed) {
         this.ports.metrics.increment('ratelimit.blocked');
-        throw new RateLimitError('Too many attempts. Try again in a few minutes.');
+        throw new RateLimitError(message);
       }
     }
   }

@@ -80,12 +80,29 @@ describe('auth', () => {
     });
 
     it('rate limits per IP, to cap one actor spreading the cost', async () => {
-      for (let i = 0; i < LIMITS.authRequest.limit; i += 1) {
+      for (let i = 0; i < LIMITS.authRequestPerIp.limit; i += 1) {
         await useCases.requestLoginCode.execute({ identifier: `user${i}@example.com`, ip: IP });
       }
       await expect(
         useCases.requestLoginCode.execute({ identifier: 'fresh@example.com', ip: IP }),
-      ).rejects.toThrow(/too many/i);
+      ).rejects.toThrow(/this network/i);
+    });
+
+    it('is FAR more generous per IP than per identifier', async () => {
+      // IP addresses are shared by offices, campuses and mobile carriers. A
+      // per-IP limit as tight as the per-identifier one would lock out everyone
+      // behind a single NAT — a self-inflicted outage that looks like a working
+      // rate limiter.
+      expect(LIMITS.authRequestPerIp.limit).toBeGreaterThan(LIMITS.authRequest.limit * 5);
+      expect(LIMITS.authVerifyPerIp.limit).toBeGreaterThan(LIMITS.authVerify.limit * 5);
+    });
+
+    it('lets a crowd behind one IP all sign up', async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await expect(
+          useCases.requestLoginCode.execute({ identifier: `colleague${i}@example.com`, ip: IP }),
+        ).resolves.toBeTruthy();
+      }
     });
 
     it('never returns a code when echo is off', async () => {

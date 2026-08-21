@@ -8,6 +8,7 @@ import { buildErrorHandler } from './errorMapping.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerProfileRoutes } from './routes/profile.js';
+import { registerRoomRoutes } from './routes/rooms.js';
 
 /**
  * ADAPTER: the HTTP edge.
@@ -110,6 +111,7 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
   await registerHealthRoutes(app, deps);
   await registerAuthRoutes(app, deps);
   await registerProfileRoutes(app, deps);
+  await registerRoomRoutes(app, deps);
 
   return app;
 }

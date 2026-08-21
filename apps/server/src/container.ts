@@ -8,11 +8,14 @@ import { CryptoIdGenerator } from './adapters/memory/MemoryIdGenerator.js';
 import { MemoryNotificationSender } from './adapters/memory/MemoryNotificationSender.js';
 import { JwtTokenService } from './adapters/auth/JwtTokenService.js';
 import { createDatabase } from './adapters/postgres/db.js';
+import { PostgresRoomRepository } from './adapters/postgres/PostgresRoomRepository.js';
 import { PostgresUserRepository } from './adapters/postgres/PostgresUserRepository.js';
+import { CompositeMessageRepository } from './adapters/messages/CompositeMessageRepository.js';
 import { createRedisClient } from './adapters/redis/client.js';
 import { RedisAuthChallengeStore } from './adapters/redis/RedisAuthChallengeStore.js';
 import { RedisEventBus } from './adapters/redis/RedisEventBus.js';
 import { RedisMetrics } from './adapters/redis/RedisMetrics.js';
+import { RedisPresenceStore } from './adapters/redis/RedisPresenceStore.js';
 import { RedisRateLimiter } from './adapters/redis/RedisRateLimiter.js';
 
 /**
@@ -123,10 +126,10 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
   /**
    * PHASE BOUNDARY — read this before assuming a port is production-backed.
    *
-   * Phase 1 delivers identity. The ports below it in the build order do not
-   * have real adapters yet, so they fall back to the in-memory fakes. That is
+   * Phases 0-2 are delivered. The ports belonging to LATER phases do not have
+   * real adapters yet, so they fall back to the in-memory fakes. That is
    * deliberate and phase-appropriate (see docs/architecture.md §6), but it MUST
-   * be loud: a room created in this mode disappears on restart.
+   * be loud: anything held by those ports disappears on restart.
    *
    * As each phase lands, its adapters replace the corresponding lines here and
    * the warning shrinks. When the list is empty, delete the fallback.
@@ -142,8 +145,11 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     ids,
     logger,
 
-    // -- Phase 1: real ------------------------------------------------------
+    // -- Phases 1-2: real ---------------------------------------------------
     users: new PostgresUserRepository(db),
+    rooms: new PostgresRoomRepository(db),
+    presence: new RedisPresenceStore(redis, clock, config.PRESENCE_TTL_SECONDS),
+    messages: new CompositeMessageRepository(redis, db),
     tokens: new JwtTokenService(
       redis,
       clock,
@@ -166,9 +172,6 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     notifications: new MemoryNotificationSender(logger, config.AUTH_ECHO_CODE),
 
     // -- Awaiting their phase: in-memory ------------------------------------
-    presence: pendingFallbacks.presence, // Phase 2
-    rooms: pendingFallbacks.rooms, // Phase 2
-    messages: pendingFallbacks.messages, // Phase 2
     media: pendingFallbacks.media, // Phase 3
     reports: pendingFallbacks.reports, // Phase 4
     relationships: pendingFallbacks.relationships, // Phase 5
@@ -180,15 +183,7 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
 
   logger.warn(
     {
-      inMemoryPorts: [
-        'presence',
-        'rooms',
-        'messages',
-        'media',
-        'reports',
-        'relationships',
-        'surprises',
-      ],
+      inMemoryPorts: ['media', 'reports', 'relationships', 'surprises'],
     },
     'some ports are still in-memory pending their build phase: that data is lost on restart',
   );

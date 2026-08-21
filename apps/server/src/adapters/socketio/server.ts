@@ -5,6 +5,7 @@ import type { Ports } from '../../domain/ports/index.js';
 import type { UserId } from '../../domain/values/ids.js';
 import type { UseCases } from '../../app/index.js';
 import { SocketIoTransport } from './SocketIoTransport.js';
+import { registerRoomHandlers } from './handlers/registerHandlers.js';
 
 /**
  * ADAPTER: the realtime edge.
@@ -125,9 +126,10 @@ export function createSocketServer(httpServer: HttpServer, deps: SocketServerDep
     const log = ports.logger.child({ socketId: socket.id, userId: session.userId });
     log.debug({}, 'socket connected');
 
-    // Phase 2 registers the room/chat handlers here.
-    // Phase 3 adds the hand-raise and speaker handlers.
-    // Phase 5 adds DM and call handlers.
+    // Room, presence and chat. Phase 3 adds hand-raise and speaker handlers,
+    // Phase 4 host moderation, Phase 5 DMs and calls — all registered here so
+    // the complete list of what a client may ask for stays readable in one place.
+    registerRoomHandlers({ ports, useCases: deps.useCases, socket, session });
 
     socket.on('disconnect', (reason) => {
       transport.unregister(session.userId, socket);

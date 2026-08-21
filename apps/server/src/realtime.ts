@@ -75,6 +75,7 @@ async function main(): Promise<void> {
 
   const stopReaper = startPresenceReaper({
     ports,
+    useCases,
     intervalSeconds: config.PRESENCE_REAP_INTERVAL_SECONDS,
   });
 

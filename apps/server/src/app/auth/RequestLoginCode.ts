@@ -65,10 +65,26 @@ export class RequestLoginCode {
   async execute(input: RequestLoginCodeInput): Promise<RequestLoginCodeResult> {
     const { value: identifier, kind } = normalizeIdentifier(input.identifier);
 
-    // Two limits, both consumed before any work. Per-identifier stops bombing
-    // one victim; per-IP stops one actor bombing many.
-    await this.enforceLimit(`auth:request:id:${identifier}`);
-    await this.enforceLimit(`auth:request:ip:${input.ip}`);
+    // Two limits with DIFFERENT purposes and therefore different sizes:
+    //
+    //   per identifier — protects a victim from being bombed. Harsh.
+    //   per IP         — caps our SMS bill. Far more generous, because IP
+    //                    addresses are shared by offices, campuses and mobile
+    //                    carriers; a tight limit here locks out everyone behind
+    //                    one NAT.
+    //
+    // Both are consumed before any work, so a flood costs the attacker a Redis
+    // INCR and costs us nothing else.
+    await this.enforceLimit(
+      `auth:request:id:${identifier}`,
+      LIMITS.authRequest,
+      'Too many codes requested for that contact. Try again in a few minutes.',
+    );
+    await this.enforceLimit(
+      `auth:request:ip:${input.ip}`,
+      LIMITS.authRequestPerIp,
+      'Too many sign-in attempts from this network. Try again in a few minutes.',
+    );
 
     // Numeric OTP: it gets read aloud, typed on a phone keypad, and
     // autofilled by the OS from an SMS. Letters would help none of that.
@@ -96,15 +112,15 @@ export class RequestLoginCode {
     };
   }
 
-  private async enforceLimit(key: string): Promise<void> {
-    const result = await this.ports.rateLimiter.check(
-      key,
-      LIMITS.authRequest.limit,
-      LIMITS.authRequest.windowSec,
-    );
+  private async enforceLimit(
+    key: string,
+    spec: { readonly limit: number; readonly windowSec: number },
+    message: string,
+  ): Promise<void> {
+    const result = await this.ports.rateLimiter.check(key, spec.limit, spec.windowSec);
     if (!result.allowed) {
       this.ports.metrics.increment('ratelimit.blocked');
-      throw new RateLimitError('Too many codes requested. Try again in a few minutes.');
+      throw new RateLimitError(message);
     }
   }
 

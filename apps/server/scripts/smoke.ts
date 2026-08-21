@@ -257,10 +257,49 @@ async function main(): Promise<void> {
   const afterLogout = await api('GET', '/me', { token: alice.tokens.accessToken });
   check('the access token is dead after logout', afterLogout.status === 401);
 
+  // -- 5. rooms (Phase 2) ----------------------------------------------------
+  step('5. rooms');
+  // A FRESH actor, deliberately. Reusing a token from the sessions step above
+  // would depend on that step's outcome — and the replay test there revokes the
+  // session on purpose, which silently killed these checks the first time.
+  // Smoke sections should be independent, so a failure points at one thing.
+  const roomHost = await registerActor('host', '1990-08-08');
+  const bobToken = roomHost.tokens.accessToken;
+
+  const created = await api<{ id: string; slug: string; title: string }>('POST', '/rooms', {
+    token: bobToken,
+    body: { title: `Smoke Room ${RUN}`, category: 'casual' },
+  });
+  check('room created', created.status === 201, created.body);
+  check('slug derived from the title', created.body.slug?.startsWith('smoke-room'), created.body);
+
+  const listed = await api<{ rooms: { id: string }[] }>('GET', '/rooms', { token: bobToken });
+  check(
+    'the new room appears in the list',
+    listed.body.rooms?.some((r) => r.id === created.body.id),
+  );
+
+  const detail = await api<{ memberCount: number }>('GET', `/rooms/${created.body.id}`, {
+    token: bobToken,
+  });
+  check('a freshly created room has nobody in it', detail.body.memberCount === 0, detail.body);
+
+  const roomsUnauthenticated = await api('GET', '/rooms');
+  check('the room list requires auth', roomsUnauthenticated.status === 401);
+
+  const badCategory = await api('POST', '/rooms', {
+    token: bobToken,
+    body: { title: 'Nope', category: 'not-a-category' },
+  });
+  check('an unknown category is refused', badCategory.status === 400, badCategory.body);
+
+  // Joining, presence and chat need real sockets, so they live in their own
+  // check rather than being half-tested over HTTP here.
+  process.stdout.write('       (joining, presence and chat: see npm run room-check)\n');
+
   // -- pending phases --------------------------------------------------------
   step('pending (not yet built)');
   for (const pending of [
-    'Phase 2: create a room, join it, chat, verify presence',
     'Phase 3: raise a hand, host approves, publish audio',
     'Phase 4: submit a report, review it, ban, verify the socket drops',
     'Phase 5: send a surprise, redeem it, open a DM, place a 1:1 call',

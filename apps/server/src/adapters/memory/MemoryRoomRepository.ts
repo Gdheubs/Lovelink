@@ -78,12 +78,14 @@ export class MemoryRoomRepository implements RoomRepository {
     this.members.set(member.roomId, rows);
   }
 
-  async recordLeave(roomId: RoomId, userId: UserId, leftAt: Date): Promise<void> {
+  async recordLeave(roomId: RoomId, userId: UserId, leftAt: Date): Promise<boolean> {
     const rows = this.members.get(roomId) ?? [];
     const open = rows.find((m) => m.userId === userId && m.leftAt === null);
-    if (open === undefined) return; // idempotent: already left
+    // Nothing open to close: another path already handled this departure.
+    if (open === undefined) return false;
     rows[rows.indexOf(open)] = Object.freeze({ ...open, leftAt });
     this.members.set(roomId, rows);
+    return true;
   }
 
   async updateRole(roomId: RoomId, userId: UserId, role: RoomRole): Promise<void> {

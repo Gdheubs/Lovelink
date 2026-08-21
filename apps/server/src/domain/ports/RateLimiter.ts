@@ -83,10 +83,36 @@ export const LIMITS = Object.freeze({
   surpriseRedeem: { limit: 10, windowSec: 600 } as LimitSpec,
   /** Report submission. Low, because report spam is a harassment vector. */
   reportSubmit: { limit: 5, windowSec: 3600 } as LimitSpec,
-  /** Auth: code requests per identifier, to stop SMS/email bombing someone. */
+  /**
+   * Auth: code requests PER IDENTIFIER.
+   *
+   * This is the control that protects a VICTIM from being SMS-bombed by someone
+   * who knows their number, so it is deliberately harsh: there is no legitimate
+   * reason to request six codes for one number in fifteen minutes.
+   */
   authRequest: { limit: 5, windowSec: 900 } as LimitSpec,
-  /** Auth: verification attempts, to stop OTP brute force. */
+
+  /**
+   * Auth: code requests PER IP.
+   *
+   * A DIFFERENT control with a DIFFERENT purpose — this one caps our SMS bill
+   * when one actor works through many numbers. It must be far more generous
+   * than the per-identifier limit, because IP ADDRESSES ARE SHARED: an office,
+   * a university, a café, and especially carrier-grade NAT put thousands of
+   * unrelated people behind one address.
+   *
+   * Setting this as tight as the per-identifier limit means the sixth person on
+   * a shared connection cannot sign up at all — a self-inflicted outage for a
+   * whole building, invisible to us because it looks like a working rate
+   * limiter.
+   */
+  authRequestPerIp: { limit: 40, windowSec: 900 } as LimitSpec,
+
+  /** Auth: verification attempts per identifier, to stop OTP brute force. */
   authVerify: { limit: 8, windowSec: 900 } as LimitSpec,
+
+  /** Auth: verification attempts per IP. Same shared-address reasoning. */
+  authVerifyPerIp: { limit: 60, windowSec: 900 } as LimitSpec,
 } as const);
 
 export type LimitName = keyof typeof LIMITS;

@@ -6,6 +6,13 @@ import { RequestLoginCode } from './auth/RequestLoginCode.js';
 import { VerifyLoginCode } from './auth/VerifyLoginCode.js';
 import { GetMyProfile } from './profile/GetMyProfile.js';
 import { UpdateMyProfile } from './profile/UpdateMyProfile.js';
+import { CreateRoom } from './rooms/CreateRoom.js';
+import { Heartbeat } from './rooms/Heartbeat.js';
+import { JoinRoom } from './rooms/JoinRoom.js';
+import { LeaveRoom } from './rooms/LeaveRoom.js';
+import { ListRooms } from './rooms/ListRooms.js';
+import { SendChatMessage, SendTypingIndicator } from './chat/SendChatMessage.js';
+import { SendReaction } from './chat/SendReaction.js';
 
 export * from './auth/AuthenticateRequest.js';
 export * from './auth/Logout.js';
@@ -14,6 +21,14 @@ export * from './auth/RequestLoginCode.js';
 export * from './auth/VerifyLoginCode.js';
 export * from './profile/GetMyProfile.js';
 export * from './profile/UpdateMyProfile.js';
+export * from './rooms/CreateRoom.js';
+export * from './rooms/Heartbeat.js';
+export * from './rooms/JoinRoom.js';
+export * from './rooms/LeaveRoom.js';
+export * from './rooms/ListRooms.js';
+export * from './rooms/roomStateView.js';
+export * from './chat/SendChatMessage.js';
+export * from './chat/SendReaction.js';
 
 /**
  * The application ring: one file per use case.
@@ -51,7 +66,18 @@ export interface UseCases {
   readonly getMyProfile: GetMyProfile;
   readonly updateMyProfile: UpdateMyProfile;
 
-  // Phase 2 adds the room and chat use cases.
+  // -- rooms and presence --------------------------------------------------
+  readonly createRoom: CreateRoom;
+  readonly listRooms: ListRooms;
+  readonly joinRoom: JoinRoom;
+  readonly leaveRoom: LeaveRoom;
+  readonly heartbeat: Heartbeat;
+
+  // -- chat ----------------------------------------------------------------
+  readonly sendChatMessage: SendChatMessage;
+  readonly sendTypingIndicator: SendTypingIndicator;
+  readonly sendReaction: SendReaction;
+
   // Phase 3 adds hand-raise and speaker management.
   // Phase 4 adds reports, bans and moderation.
   // Phase 5 adds surprises, DMs and calls.
@@ -80,5 +106,15 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
 
     getMyProfile: new GetMyProfile(ports),
     updateMyProfile: new UpdateMyProfile(ports),
+
+    createRoom: new CreateRoom(ports),
+    listRooms: new ListRooms(ports),
+    joinRoom: new JoinRoom(ports),
+    leaveRoom: new LeaveRoom(ports),
+    heartbeat: new Heartbeat(ports),
+
+    sendChatMessage: new SendChatMessage(ports),
+    sendTypingIndicator: new SendTypingIndicator(ports),
+    sendReaction: new SendReaction(ports),
   };
 }

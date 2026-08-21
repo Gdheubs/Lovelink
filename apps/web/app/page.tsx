@@ -21,8 +21,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      // Phase 2 changes this to the room list, which is the real home.
-      router.replace('/profile');
+      router.replace('/rooms');
     } else if (status === 'anonymous') {
       router.replace('/signin');
     }

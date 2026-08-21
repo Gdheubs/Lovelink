@@ -61,8 +61,23 @@ export interface RoomRepository {
    */
   recordJoin(member: Omit<RoomMember, 'leftAt'>): Promise<void>;
 
-  /** Close the open membership row by setting `leftAt`. Idempotent. */
-  recordLeave(roomId: RoomId, userId: UserId, leftAt: Date): Promise<void>;
+  /**
+   * Close the open membership row by setting `leftAt`.
+   *
+   * @returns true when THIS call closed an open session; false when there was
+   *          nothing open to close.
+   *
+   * WHY IT RETURNS A BOOLEAN: departure runs from several places at once and
+   * routinely — an explicit `room:leave`, the socket `disconnect` handler, and
+   * the presence reaper can all fire for one person leaving. Exactly one of
+   * them should announce `user:left`, or the room watches them depart three
+   * times.
+   *
+   * Making the CLOSE itself report whether it did anything turns that into an
+   * atomic compare-and-set (`UPDATE ... WHERE left_at IS NULL RETURNING`)
+   * rather than a check-then-act that two concurrent callers can both win.
+   */
+  recordLeave(roomId: RoomId, userId: UserId, leftAt: Date): Promise<boolean>;
 
   updateRole(roomId: RoomId, userId: UserId, role: RoomRole): Promise<void>;
 
