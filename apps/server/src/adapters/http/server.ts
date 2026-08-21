@@ -9,6 +9,8 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerRoomRoutes } from './routes/rooms.js';
+import { registerAdminRoutes } from './routes/admin.js';
+import formbody from '@fastify/formbody';
 
 /**
  * ADAPTER: the HTTP edge.
@@ -100,6 +102,10 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
   // secret to rotate for no additional guarantee.
   await app.register(cookie);
 
+  // The admin review page is a plain HTML form, which posts urlencoded rather
+  // than JSON. Registered narrowly for that one surface.
+  await app.register(formbody);
+
   app.setErrorHandler(buildErrorHandler(ports.logger, ports.metrics));
 
   app.setNotFoundHandler((request, reply) => {
@@ -112,6 +118,7 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
   await registerAuthRoutes(app, deps);
   await registerProfileRoutes(app, deps);
   await registerRoomRoutes(app, deps);
+  await registerAdminRoutes(app, deps);
 
   return app;
 }

@@ -185,6 +185,34 @@ export function registerRoomHandlers(context: HandlerContext): void {
     });
   });
 
+  // -- safety ---------------------------------------------------------------
+
+  on(context, 'room:kick', async (payload, user) => {
+    // HOST ONLY, and room-scoped: a host runs a room, a moderator runs the
+    // platform. Enforced inside the use case from live presence.
+    await useCases.kickUser.execute(user, {
+      roomId: asRoomId(payload.roomId),
+      userId: asUserId(payload.userId),
+    });
+  });
+
+  on(context, 'report:submit', async (payload, user) => {
+    await useCases.submitReport.execute(user, {
+      targetId: asUserId(payload.targetId),
+      roomId: payload.roomId === undefined ? null : asRoomId(payload.roomId),
+      category: payload.category,
+      ...(payload.note === undefined ? {} : { note: payload.note }),
+    });
+
+    // Acknowledged to the reporter alone, and deliberately vague: it must not
+    // reveal whether this person has been reported before, which would be a
+    // way to probe someone else's standing.
+    socket.emit('error', {
+      code: 'CONFLICT',
+      message: 'Thank you. Our team will look at this.',
+    });
+  });
+
   /**
    * Disconnect cleanup.
    *

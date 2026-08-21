@@ -23,6 +23,7 @@ import { assertAllowedReaction, normalizeChatText } from '../../src/domain/entit
 import { hasUnsafeCharacters, MULTI_LINE, normalizeBody } from '../../src/domain/values/text.js';
 import {
   projectTrustScore,
+  TRUST_DELTAS,
   trustTier,
   TRUST_MAX,
   TRUST_MIN,
@@ -197,8 +198,47 @@ describe('trust projection', () => {
   it('maps scores to tiers', () => {
     expect(trustTier(-1)).toBe('restricted');
     expect(trustTier(0)).toBe('newcomer');
-    expect(trustTier(10)).toBe('regular');
-    expect(trustTier(40)).toBe('trusted');
+    expect(trustTier(25)).toBe('regular');
+    expect(trustTier(60)).toBe('trusted');
+  });
+
+  it('a brand-new account reads as NEWCOMER, not regular', () => {
+    // The thresholds are sized relative to the starting balance. Introducing
+    // the balance without moving them made every new signup display as
+    // "Regular" on their own profile.
+    expect(trustTier(TRUST_DELTAS.account_created)).toBe('newcomer');
+  });
+
+  describe('the starting balance is what keeps a kick room-scoped', () => {
+    // A regression pin. With a starting balance of zero, ONE kick took a new
+    // account below zero and therefore to `restricted`, which blocks joining
+    // ANY room — so one host could remove someone from the whole platform.
+    const start = TRUST_DELTAS.account_created;
+
+    it('a new account is not restricted', () => {
+      expect(trustTier(projectTrustScore([start]))).not.toBe('restricted');
+    });
+
+    it('ONE kick does not restrict', () => {
+      const score = projectTrustScore([start, TRUST_DELTAS.kicked_from_room]);
+      expect(trustTier(score)).not.toBe('restricted');
+    });
+
+    it('a PATTERN of kicks does restrict', () => {
+      const kicks = Array.from({ length: 3 }, () => TRUST_DELTAS.kicked_from_room);
+      expect(trustTier(projectTrustScore([start, ...kicks]))).toBe('restricted');
+    });
+
+    it('ONE upheld report restricts immediately', () => {
+      // A moderator reviewing evidence is strong evidence, unlike a single
+      // host acting unilaterally.
+      const score = projectTrustScore([start, TRUST_DELTAS.report_upheld]);
+      expect(trustTier(score)).toBe('restricted');
+    });
+
+    it('a dismissed report costs nothing', () => {
+      expect(TRUST_DELTAS.report_dismissed).toBe(0);
+    });
   });
 });
 

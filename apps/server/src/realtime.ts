@@ -3,6 +3,7 @@ import { createUseCases } from './app/index.js';
 import { createLogger } from './adapters/observability/PinoLogger.js';
 import { createSocketServer } from './adapters/socketio/server.js';
 import { startPresenceReaper } from './adapters/socketio/presenceReaper.js';
+import { startModerationSubscriber } from './adapters/socketio/moderationSubscriber.js';
 import { loadConfig } from './config.js';
 import { createContainer } from './container.js';
 
@@ -56,7 +57,10 @@ async function main(): Promise<void> {
 
   const container = await createContainer({ config, logger });
   const { ports } = container;
-  const useCases = createUseCases(ports, { echoLoginCode: config.AUTH_ECHO_CODE });
+  const useCases = createUseCases(ports, {
+    echoLoginCode: config.AUTH_ECHO_CODE,
+    moderatorUserIds: config.moderatorUserIds,
+  });
 
   // A bare HTTP server, existing only to carry the websocket upgrade and to
   // answer /healthz — this process has no REST surface of its own.
@@ -72,6 +76,8 @@ async function main(): Promise<void> {
 
   const realtime = createSocketServer(httpServer, { config, ports, useCases });
   container.attachRealtime(realtime.transport);
+
+  const stopModerationSubscriber = await startModerationSubscriber({ ports });
 
   const stopReaper = startPresenceReaper({
     ports,
@@ -91,6 +97,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'shutting down realtime process');
     try {
       stopReaper();
+      await stopModerationSubscriber();
       await realtime.close();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
       await container.shutdown();

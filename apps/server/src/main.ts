@@ -3,6 +3,7 @@ import { createHttpServer } from './adapters/http/server.js';
 import { createLogger } from './adapters/observability/PinoLogger.js';
 import { createSocketServer } from './adapters/socketio/server.js';
 import { startPresenceReaper } from './adapters/socketio/presenceReaper.js';
+import { startModerationSubscriber } from './adapters/socketio/moderationSubscriber.js';
 import { loadConfig } from './config.js';
 import { createContainer } from './container.js';
 
@@ -56,7 +57,10 @@ async function main(): Promise<void> {
   const { ports } = container;
 
   // 4. Use cases.
-  const useCases = createUseCases(ports, { echoLoginCode: config.AUTH_ECHO_CODE });
+  const useCases = createUseCases(ports, {
+    echoLoginCode: config.AUTH_ECHO_CODE,
+    moderatorUserIds: config.moderatorUserIds,
+  });
 
   // 5. HTTP edge.
   const app = await createHttpServer({ config, ports, useCases });
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
   // architecture §3.
   let closeRealtime: (() => Promise<void>) | null = null;
   let stopReaper: (() => void) | null = null;
+  let stopModerationSubscriber: (() => Promise<void>) | null = null;
 
   if (config.REALTIME_IN_PROCESS) {
     const realtime = createSocketServer(app.server, { config, ports, useCases });
@@ -85,6 +90,12 @@ async function main(): Promise<void> {
       useCases,
       intervalSeconds: config.PRESENCE_REAP_INTERVAL_SECONDS,
     });
+
+    // Cross-process ban enforcement. Redundant while everything runs in one
+    // process, and essential the moment realtime is split out — at which point
+    // the moderator's request and the abusive user's socket are on different
+    // machines.
+    stopModerationSubscriber = await startModerationSubscriber({ ports });
 
     closeRealtime = realtime.close;
     logger.info({ mode: 'in-process' }, 'realtime server attached');
@@ -120,6 +131,7 @@ async function main(): Promise<void> {
 
     try {
       stopReaper?.();
+      if (stopModerationSubscriber !== null) await stopModerationSubscriber();
       if (closeRealtime !== null) await closeRealtime();
       await app.close();
       await container.shutdown();

@@ -7,6 +7,7 @@ import { loadConfig, type Config } from '../../src/config.js';
 import type { User } from '../../src/domain/entities/User.js';
 import type { RoomId } from '../../src/domain/values/ids.js';
 import { asUserId } from '../../src/domain/values/ids.js';
+import { TRUST_DELTAS } from '../../src/domain/values/trust.js';
 
 /**
  * A REAL Socket.io server, in-process, over a real TCP port, backed by the
@@ -115,7 +116,7 @@ export async function startSocketHarness(
     LOG_LEVEL: 'error',
   } as NodeJS.ProcessEnv);
 
-  const useCases = createUseCases(ports, { echoLoginCode: true });
+  const useCases = createUseCases(ports, { echoLoginCode: true, moderatorUserIds: [] });
 
   const httpServer: HttpServer = createServer();
   const realtime: RealtimeServer = createSocketServer(httpServer, { config, ports, useCases });
@@ -154,7 +155,7 @@ export async function startSocketHarness(
 
     async createUser(displayName) {
       userCounter += 1;
-      return ports.users.create({
+      const user = await ports.users.create({
         id: asUserId(ports.ids.uuid()),
         identifier: `${displayName.toLowerCase()}-${userCounter}@example.com`,
         identifierKind: 'email',
@@ -163,6 +164,20 @@ export async function startSocketHarness(
         dob: new Date('1995-01-01T00:00:00.000Z'),
         createdAt: ports.clock.now(),
       });
+
+      // Mirrors what registration does: VerifyLoginCode opens the ledger with
+      // `account_created`, which carries the STARTING BALANCE. A fixture that
+      // skips it produces users who are one kick away from being restricted —
+      // an account state no real user is ever in.
+      await ports.users.appendTrustEvent({
+        userId: user.id,
+        delta: TRUST_DELTAS.account_created,
+        reason: 'account_created',
+        context: null,
+        createdAt: ports.clock.now(),
+      });
+
+      return (await ports.users.findById(user.id)) ?? user;
     },
 
     tokenFor,

@@ -17,6 +17,13 @@ import { RaiseHand } from './speaking/RaiseHand.js';
 import { ApproveSpeaker } from './speaking/ApproveSpeaker.js';
 import { RemoveSpeaker, StepDownAsSpeaker } from './speaking/RemoveSpeaker.js';
 import { MuteSpeaker } from './speaking/MuteSpeaker.js';
+import { SubmitReport } from './safety/SubmitReport.js';
+import { BanUser, LiftBan } from './safety/BanUser.js';
+import { ClaimReport, ListReportQueue, ResolveReport } from './safety/ReviewReports.js';
+import { BlockUser, UnblockUser } from './safety/BlockUser.js';
+import { KickUser } from './safety/KickUser.js';
+import type { ModeratorDirectory } from '../domain/rules/moderation.js';
+import { asUserId } from '../domain/values/ids.js';
 
 export * from './auth/AuthenticateRequest.js';
 export * from './auth/Logout.js';
@@ -37,6 +44,11 @@ export * from './speaking/RaiseHand.js';
 export * from './speaking/ApproveSpeaker.js';
 export * from './speaking/RemoveSpeaker.js';
 export * from './speaking/MuteSpeaker.js';
+export * from './safety/SubmitReport.js';
+export * from './safety/BanUser.js';
+export * from './safety/ReviewReports.js';
+export * from './safety/BlockUser.js';
+export * from './safety/KickUser.js';
 
 /**
  * The application ring: one file per use case.
@@ -93,7 +105,17 @@ export interface UseCases {
   readonly stepDownAsSpeaker: StepDownAsSpeaker;
   readonly muteSpeaker: MuteSpeaker;
 
-  // Phase 4 adds reports, bans and moderation.
+  // -- safety and moderation -----------------------------------------------
+  readonly submitReport: SubmitReport;
+  readonly listReportQueue: ListReportQueue;
+  readonly claimReport: ClaimReport;
+  readonly resolveReport: ResolveReport;
+  readonly banUser: BanUser;
+  readonly liftBan: LiftBan;
+  readonly blockUser: BlockUser;
+  readonly unblockUser: UnblockUser;
+  readonly kickUser: KickUser;
+
   // Phase 5 adds surprises, DMs and calls.
 }
 
@@ -104,6 +126,14 @@ export interface UseCaseOptions {
    * a phone number.
    */
   readonly echoLoginCode: boolean;
+
+  /**
+   * User ids with moderator powers, from validated config.
+   *
+   * A config allowlist rather than a database role: anyone who can write a
+   * user row must not be able to mint a moderator. See rules/moderation.ts.
+   */
+  readonly moderatorUserIds: readonly string[];
 }
 
 /**
@@ -111,6 +141,15 @@ export interface UseCaseOptions {
  * composition root in /src/main.ts.
  */
 export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases {
+  const moderators: ModeratorDirectory = {
+    moderatorIds: new Set(options.moderatorUserIds.map(asUserId)),
+  };
+
+  // Departure has ONE implementation, and ban and kick both route through it
+  // rather than reimplementing cleanup. See the audit's F-series for what
+  // happens when a second path diverges.
+  const leaveRoom = new LeaveRoom(ports);
+
   return {
     authenticate: new AuthenticateRequest(ports),
     requestLoginCode: new RequestLoginCode(ports, { echoCode: options.echoLoginCode }),
@@ -124,7 +163,7 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     createRoom: new CreateRoom(ports),
     listRooms: new ListRooms(ports),
     joinRoom: new JoinRoom(ports),
-    leaveRoom: new LeaveRoom(ports),
+    leaveRoom,
     heartbeat: new Heartbeat(ports),
 
     sendChatMessage: new SendChatMessage(ports),
@@ -136,5 +175,15 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     removeSpeaker: new RemoveSpeaker(ports),
     stepDownAsSpeaker: new StepDownAsSpeaker(ports),
     muteSpeaker: new MuteSpeaker(ports),
+
+    submitReport: new SubmitReport(ports),
+    listReportQueue: new ListReportQueue(ports, moderators),
+    claimReport: new ClaimReport(ports, moderators),
+    resolveReport: new ResolveReport(ports, moderators),
+    banUser: new BanUser(ports, moderators, leaveRoom),
+    liftBan: new LiftBan(ports, moderators),
+    blockUser: new BlockUser(ports),
+    unblockUser: new UnblockUser(ports),
+    kickUser: new KickUser(ports, leaveRoom),
   };
 }

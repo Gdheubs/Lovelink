@@ -43,7 +43,7 @@ describe('rooms', () => {
 
   beforeEach(async () => {
     ports = createMemoryPorts({ presenceTtlSeconds: PRESENCE_TTL_SECONDS });
-    useCases = createUseCases(ports, { echoLoginCode: true });
+    useCases = createUseCases(ports, { echoLoginCode: true, moderatorUserIds: [] });
 
     host = await makeUser('Hosty');
     alice = await makeUser('Alice');

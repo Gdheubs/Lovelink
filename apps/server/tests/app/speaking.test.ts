@@ -5,6 +5,7 @@ import type { User } from '../../src/domain/entities/User.js';
 import type { RoomId } from '../../src/domain/values/ids.js';
 import { asUserId } from '../../src/domain/values/ids.js';
 import { LIMITS } from '../../src/domain/ports/RateLimiter.js';
+import { TRUST_DELTAS } from '../../src/domain/values/trust.js';
 import type { DomainError } from '../../src/domain/errors.js';
 
 /**
@@ -29,8 +30,8 @@ describe('speaking', () => {
   let bob: User;
   let roomId: RoomId;
 
-  const makeUser = async (name: string): Promise<User> =>
-    ports.users.create({
+  const makeUser = async (name: string): Promise<User> => {
+    const user = await ports.users.create({
       id: asUserId(ports.ids.uuid()),
       identifier: `${name.toLowerCase()}@example.com`,
       identifierKind: 'email',
@@ -40,9 +41,23 @@ describe('speaking', () => {
       createdAt: ports.clock.now(),
     });
 
+    // Mirrors registration: the `account_created` ledger entry carries the
+    // starting balance, without which a fixture user is one kick from being
+    // restricted — a state no real account is ever in.
+    await ports.users.appendTrustEvent({
+      userId: user.id,
+      delta: TRUST_DELTAS.account_created,
+      reason: 'account_created',
+      context: null,
+      createdAt: ports.clock.now(),
+    });
+
+    return (await ports.users.findById(user.id)) ?? user;
+  };
+
   beforeEach(async () => {
     ports = createMemoryPorts({ presenceTtlSeconds: 60 });
-    useCases = createUseCases(ports, { echoLoginCode: true });
+    useCases = createUseCases(ports, { echoLoginCode: true, moderatorUserIds: [] });
 
     host = await makeUser('Hosty');
     alice = await makeUser('Alice');
@@ -88,7 +103,7 @@ describe('speaking', () => {
     it('still joins when the media server is unavailable', async () => {
       // A media outage must degrade to a text room, not take the product down.
       const broken = createMemoryPorts({ presenceTtlSeconds: 60 });
-      const brokenUseCases = createUseCases(broken, { echoLoginCode: true });
+      const brokenUseCases = createUseCases(broken, { echoLoginCode: true, moderatorUserIds: [] });
 
       broken.media.createRoom = async () => {
         throw new Error('media server unreachable');

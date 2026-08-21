@@ -23,7 +23,7 @@ describe('auth', () => {
 
   beforeEach(() => {
     ports = createMemoryPorts();
-    useCases = createUseCases(ports, { echoLoginCode: true });
+    useCases = createUseCases(ports, { echoLoginCode: true, moderatorUserIds: [] });
   });
 
   /** Complete a full signup and return the result. */
@@ -106,7 +106,7 @@ describe('auth', () => {
     });
 
     it('never returns a code when echo is off', async () => {
-      const production = createUseCases(ports, { echoLoginCode: false });
+      const production = createUseCases(ports, { echoLoginCode: false, moderatorUserIds: [] });
       const result = await production.requestLoginCode.execute({ identifier: EMAIL, ip: IP });
       expect(result.devCode).toBeNull();
     });

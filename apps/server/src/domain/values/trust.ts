@@ -29,27 +29,67 @@ export type TrustReason =
   | 'banned'
   | 'manual_adjustment';
 
-/** The canonical delta table. Use cases reference these, never magic numbers. */
+/**
+ * The canonical delta table. Use cases reference these, never magic numbers.
+ *
+ * THE STARTING BALANCE IS LOAD-BEARING
+ * ------------------------------------
+ * `account_created` is POSITIVE, and that is not a welcome gift — it is what
+ * stops a single negative event from restricting a brand-new account.
+ *
+ * With a starting balance of zero, one `kicked_from_room` took a new user
+ * straight below zero and therefore to the `restricted` tier, which blocks
+ * joining ANY room. So one host, kicking one person for any reason at all —
+ * including a capricious one — effectively removed them from the whole
+ * platform. That directly contradicts what a kick is supposed to be
+ * (room-scoped, not account-scoped) and was found by a test that expected a
+ * kicked user to be able to walk into a different room.
+ *
+ * The balance is therefore sized so that:
+ *   - ONE kick costs something but restricts nobody;
+ *   - a PATTERN of kicks does restrict, which is what the signal is actually
+ *     worth ("a host asked them to leave" is weak evidence; "several hosts
+ *     did" is not);
+ *   - ONE upheld report restricts immediately, because a moderator reviewing
+ *     evidence is strong evidence and should not need to happen three times.
+ */
 export const TRUST_DELTAS: Readonly<Record<TrustReason, number>> = Object.freeze({
-  account_created: 0,
+  // The starting balance. See above — this is a safety property, not a perk.
+  account_created: 10,
   room_session_completed: 2,
   promoted_to_speaker: 3,
   surprise_sent: 1,
   surprise_redeemed: 2,
+  // Strong evidence, reviewed by a person: restricts on its own (10 - 25 < 0).
   report_upheld: -25,
   report_dismissed: 0,
-  kicked_from_room: -10,
+  // Weak evidence, applied unilaterally by one host: three of them restrict.
+  kicked_from_room: -5,
   banned: -100,
   manual_adjustment: 0,
 });
 
 export type TrustTier = 'restricted' | 'newcomer' | 'regular' | 'trusted';
 
-/** Thresholds are inclusive lower bounds, checked from the top down. */
+/**
+ * Thresholds are inclusive lower bounds, checked from the top down.
+ *
+ * THEY ARE SIZED RELATIVE TO THE STARTING BALANCE, and must stay that way.
+ * `account_created` grants 10, so `regular` has to begin well above that — a
+ * brand-new account that reads as "Regular" on its own profile screen is
+ * simply wrong, and it was exactly what happened when the starting balance was
+ * introduced without moving these.
+ *
+ * Roughly: NEWCOMER is where you start, REGULAR is a handful of real sessions
+ * in, TRUSTED takes sustained participation.
+ */
+const REGULAR_FROM = 25;
+const TRUSTED_FROM = 60;
+
 export function trustTier(score: number): TrustTier {
   if (score < 0) return 'restricted';
-  if (score >= 40) return 'trusted';
-  if (score >= 10) return 'regular';
+  if (score >= TRUSTED_FROM) return 'trusted';
+  if (score >= REGULAR_FROM) return 'regular';
   return 'newcomer';
 }
 
