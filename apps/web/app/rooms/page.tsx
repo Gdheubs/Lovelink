@@ -93,6 +93,17 @@ export default function RoomsPage() {
           </Link>
         </header>
 
+        {/*
+          The two screens that only make sense once you have been in a room.
+          They live here rather than in a bottom tab bar because at this stage
+          the room list IS the home screen, and a permanent nav bar for three
+          destinations costs more vertical space than it earns.
+        */}
+        <nav className="home-nav" aria-label="Elsewhere">
+          <Link href="/connections">Connections</Link>
+          <Link href="/surprises">Surprises</Link>
+        </nav>
+
         <nav className="chips" aria-label="Filter by category">
           {CATEGORIES.map((option) => (
             <button

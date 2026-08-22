@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '../lib/AuthProvider';
+import { SignallingProvider } from '../lib/SignallingProvider';
 import './globals.css';
 
 /**
@@ -40,7 +41,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {/*
+            Inside AuthProvider because it needs a session before it can open a
+            socket, and wrapping everything because a ringing phone has to
+            reach the user on whatever screen they happen to be on. See
+            SignallingProvider for why this cannot live on a page.
+          */}
+          <SignallingProvider>{children}</SignallingProvider>
+        </AuthProvider>
       </body>
     </html>
   );

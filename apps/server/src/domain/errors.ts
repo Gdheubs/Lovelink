@@ -36,6 +36,11 @@ export type DomainErrorCode =
   | 'ROOM_FULL'
   | 'SPEAKER_SLOTS_FULL'
   | 'ALREADY_REDEEMED'
+  // Both of these exist so a client can tell "try again later" apart from
+  // "you are not allowed to do this", which look identical as a 409 and lead
+  // to very different UI: one offers a retry, the other must not.
+  | 'CALL_BUSY'
+  | 'NO_PENDING_CALL'
   // throttling / infrastructure-shaped but domain-meaningful
   | 'RATE_LIMITED'
   | 'INTERNAL';
@@ -123,6 +128,8 @@ export function httpStatusForCode(code: DomainErrorCode): number {
     case 'ROOM_FULL':
     case 'SPEAKER_SLOTS_FULL':
     case 'ALREADY_REDEEMED':
+    case 'CALL_BUSY':
+    case 'NO_PENDING_CALL':
       return 409;
     case 'RATE_LIMITED':
       return 429;

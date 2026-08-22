@@ -22,6 +22,13 @@ import { BanUser, LiftBan } from './safety/BanUser.js';
 import { ClaimReport, ListReportQueue, ResolveReport } from './safety/ReviewReports.js';
 import { BlockUser, UnblockUser } from './safety/BlockUser.js';
 import { KickUser } from './safety/KickUser.js';
+import { CreateSurprise } from './surprises/CreateSurprise.js';
+import { RedeemSurprise, ToggleSurpriseTask } from './surprises/RedeemSurprise.js';
+import { ListMySurprises } from './surprises/ListMySurprises.js';
+import { AcceptDm, DeclineDm, RequestDm } from './connections/RequestDm.js';
+import { ReadDmThread, SendDm } from './connections/SendDm.js';
+import { ListConnections } from './connections/ListConnections.js';
+import { AcceptCall, EndCall, InviteToCall } from './connections/CallUser.js';
 import type { ModeratorDirectory } from '../domain/rules/moderation.js';
 import { asUserId } from '../domain/values/ids.js';
 
@@ -49,6 +56,13 @@ export * from './safety/BanUser.js';
 export * from './safety/ReviewReports.js';
 export * from './safety/BlockUser.js';
 export * from './safety/KickUser.js';
+export * from './surprises/CreateSurprise.js';
+export * from './surprises/RedeemSurprise.js';
+export * from './surprises/ListMySurprises.js';
+export * from './connections/RequestDm.js';
+export * from './connections/SendDm.js';
+export * from './connections/ListConnections.js';
+export * from './connections/CallUser.js';
 
 /**
  * The application ring: one file per use case.
@@ -115,6 +129,25 @@ export interface UseCases {
   readonly blockUser: BlockUser;
   readonly unblockUser: UnblockUser;
   readonly kickUser: KickUser;
+
+  // -- surprises (rung 0 of the ladder: no relationship required) -----------
+  readonly createSurprise: CreateSurprise;
+  readonly redeemSurprise: RedeemSurprise;
+  readonly toggleSurpriseTask: ToggleSurpriseTask;
+  readonly listMySurprises: ListMySurprises;
+
+  // -- connections: DM (rung 3) --------------------------------------------
+  readonly requestDm: RequestDm;
+  readonly acceptDm: AcceptDm;
+  readonly declineDm: DeclineDm;
+  readonly sendDm: SendDm;
+  readonly readDmThread: ReadDmThread;
+  readonly listConnections: ListConnections;
+
+  // -- connections: 1:1 call (rung 4) --------------------------------------
+  readonly inviteToCall: InviteToCall;
+  readonly acceptCall: AcceptCall;
+  readonly endCall: EndCall;
 
   // Phase 5 adds surprises, DMs and calls.
 }
@@ -185,5 +218,21 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     blockUser: new BlockUser(ports),
     unblockUser: new UnblockUser(ports),
     kickUser: new KickUser(ports, leaveRoom),
+
+    createSurprise: new CreateSurprise(ports),
+    redeemSurprise: new RedeemSurprise(ports),
+    toggleSurpriseTask: new ToggleSurpriseTask(ports),
+    listMySurprises: new ListMySurprises(ports),
+
+    requestDm: new RequestDm(ports),
+    acceptDm: new AcceptDm(ports),
+    declineDm: new DeclineDm(ports),
+    sendDm: new SendDm(ports),
+    readDmThread: new ReadDmThread(ports),
+    listConnections: new ListConnections(ports),
+
+    inviteToCall: new InviteToCall(ports),
+    acceptCall: new AcceptCall(ports),
+    endCall: new EndCall(ports),
   };
 }

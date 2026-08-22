@@ -41,3 +41,31 @@ export function pairKey(a: UserId, b: UserId): string {
   const [x, y] = orderedPair(a, b);
   return `${x}:${y}`;
 }
+
+/**
+ * The media room two people share when they call each other.
+ *
+ * WHY IT IS DERIVED RATHER THAN ALLOCATED
+ * ---------------------------------------
+ * Both sides need to agree on the room name, and the obvious way to do that —
+ * generate an id when the call starts and pass it around — means the name only
+ * exists in a message that can be lost. A caller who reconnects mid-ring, or a
+ * recipient whose `call:incoming` arrived twice, would otherwise have no way to
+ * be sure they were about to join the same room.
+ *
+ * Deriving it from the pair makes the name a FACT rather than a message. It is
+ * the same before, during and after the call, on both clients, after any
+ * restart, with no lookup.
+ *
+ * IT IS DELIBERATELY NOT A `rooms` ROW. A 1:1 call must never appear in the
+ * room directory, and the surest way to guarantee that is for it to have no row
+ * to be listed from. It exists only as a name the media server knows.
+ *
+ * The value is not a secret and does not need to be: possession of the name
+ * grants nothing. Joining requires a token, and tokens are only minted by
+ * AcceptCall for the two people the relationship names.
+ */
+export function callRoomId(a: UserId, b: UserId): RoomId {
+  const [x, y] = orderedPair(a, b);
+  return asRoomId(`call-${x}-${y}`);
+}

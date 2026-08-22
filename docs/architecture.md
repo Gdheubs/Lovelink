@@ -172,8 +172,12 @@ rate-limited through the `RateLimiter` port, **(d)** emits through
 `room:join` · `room:leave` · `presence:heartbeat` · `chat:send` · `chat:typing` ·
 `reaction:send` · `hand:raise` · `hand:lower` · `speaker:approve` _(host)_ ·
 `speaker:remove` _(host)_ · `room:mute-user` _(host)_ · `room:kick` _(host)_ ·
-`dm:request` · `dm:accept` · `dm:message` · `call:invite` · `call:accept` ·
-`call:decline` · `report:submit`
+`dm:request` · `dm:accept` · `dm:decline` · `dm:message` · `call:invite` ·
+`call:accept` · `call:decline` · `report:submit`
+
+`dm:decline` was added in phase 5. It is deliberately silent — the requester is
+never told — so from their side a decline is indistinguishable from a request
+that has simply not been answered yet.
 
 **Server → Client**
 `room:state` · `user:joined` · `user:left` · `chat:message` · `chat:typing` ·
@@ -250,15 +254,31 @@ conflating the two is how a partial outage becomes a restart storm.
 Each phase ends runnable. **Do not start phase N+1 while phase N's exit criteria
 fail.** Features not listed require an ADR.
 
-| Phase | Scope                                                                                     | Exit criteria                                                          | Status  |
-| ----- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------- |
-| **0** | Skeleton: monorepo, strict TS, lint/format, Compose, config, migrations, memory fakes, CI | `npm run dev:memory` boots both servers with zero external services    | ✅ done |
-| **1** | Identity: register with DOB gate, login, refresh, logout, profiles                        | two real users can register and log in on the VPS                      | ⏳ next |
-| **2** | Rooms with **text chat only** — no audio, deliberately                                    | 10 users chat in a room with correct presence                          |         |
-| **3** | Voice: LiveKit, listen-only tokens, raise hand → approve → publish                        | host + 3 speakers + N listeners on real phones over mobile data        |         |
-| **4** | Safety & moderation, before inviting strangers                                            | a reported user is reviewed, banned, and their socket drops in seconds |         |
-| **5** | Surprise mechanic + trust ladder end to end                                               | meet → surprise → DM → 1:1 call                                        |         |
-| **6** | Retention & polish: streaks, scheduled rooms, PWA push, onboarding                        | a new user's first five minutes are smooth on a mid-range Android      |         |
+| Phase | Scope                                                                                     | Exit criteria                                                          | Status |
+| ----- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------ |
+| **0** | Skeleton: monorepo, strict TS, lint/format, Compose, config, migrations, memory fakes, CI | `npm run dev:memory` boots both servers with zero external services    | ✅ verified |
+| **1** | Identity: register with DOB gate, login, refresh, logout, profiles                        | two real users can register and log in on the VPS                      | ◐ locally |
+| **2** | Rooms with **text chat only** — no audio, deliberately                                    | 10 users chat in a room with correct presence                          | ✅ verified · `room-check` 20/20 |
+| **3** | Voice: LiveKit, listen-only tokens, raise hand → approve → publish                        | host + 3 speakers + N listeners on real phones over mobile data        | ◐ locally |
+| **4** | Safety & moderation, before inviting strangers                                            | a reported user is reviewed, banned, and their socket drops in seconds | ✅ verified · `safety-check` 18/18 |
+| **5** | Surprise mechanic + trust ladder end to end                                               | meet → surprise → DM → 1:1 call                                        | ✅ verified · `ladder-check` 43/43 |
+| **6** | Retention & polish: streaks, scheduled rooms, PWA push, onboarding                        | a new user's first five minutes are smooth on a mid-range Android      | ⏳ next |
+
+**What the two status markers mean, precisely.**
+
+- **✅ verified** — the exit criterion was executed as written, against real
+  Postgres, Redis and LiveKit, by the named script.
+- **◐ locally** — every rule and adapter is verified and the journey runs
+  end to end against real services on one machine, but the criterion's own
+  wording demands something this environment does not have: a deployed VPS
+  (phase 1) and two physical handsets on mobile data (phase 3). Those clauses
+  are **unmet**, not waived. See `docs/audit-report.md` for the standing
+  environment constraints and `docs/final-acceptance.md` (phase 6, B4) for where
+  they must finally be discharged.
+
+A phase is not "done" because its code exists. It is done when the criterion
+above passes, which is why the middle column names an observable outcome rather
+than a feature list.
 
 **Phase 2 has no audio on purpose.** It proves the entire realtime backbone —
 presence, heartbeat, ghost cleanup, reconnect snapshots, rate limiting — before
@@ -283,3 +303,13 @@ media complexity arrives to obscure which layer a bug is in.
 ## Architecture Decision Records
 
 See [`docs/adr/`](./adr/). One short record per significant choice.
+
+| # | Decision |
+| - | -------- |
+| [0001](./adr/0001-ports-and-adapters.md) | Ports and adapters, enforced by lint |
+| [0002](./adr/0002-livekit-sfu.md) | LiveKit as the SFU, behind `MediaRoomProvider` |
+| [0003](./adr/0003-no-orm.md) | Raw SQL, no ORM |
+| [0004](./adr/0004-trust-ladder-in-domain.md) | The trust ladder is pure domain code |
+| [0005](./adr/0005-realtime-in-process-first.md) | Realtime runs in-process first |
+| [0006](./adr/0006-ephemeral-room-chat.md) | Room chat is ephemeral; DMs persist |
+| [0007](./adr/0007-call-signalling-in-the-relationship.md) | Call signalling lives in the relationship row |

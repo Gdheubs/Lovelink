@@ -851,3 +851,627 @@ body {
   color: var(--success);
   background: rgba(107, 196, 160, 0.08);
 }
+
+/* ============================================================== PHASE 5 ===
+ *
+ * Signalling, connections and surprises.
+ *
+ * The call overlay is the only fixed-position UI in the app, and deliberately
+ * so: a ringing phone is not a destination you navigate to, it arrives on top
+ * of whatever you were doing. Everything else here reuses the primitives above.
+ */
+
+/* --------------------------------------------------------- the call overlay */
+
+/*
+ * The ringing sheet.
+ *
+ * Covers the screen because it demands a decision, and because a call notice
+ * that can be scrolled past is a call that gets missed. It is the highest layer
+ * in the app, above the room's own floating UI.
+ */
+.call-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(16, 10, 24, 0.92);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  padding: var(--page-padding);
+}
+
+.call-sheet-inner {
+  text-align: center;
+  max-width: 22rem;
+  width: 100%;
+}
+
+.call-sheet-who {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.call-sheet-sub {
+  color: var(--text-muted);
+  margin: 0 0 2.5rem;
+  /* A slow pulse, not a flash: this is a phone ringing, not an alarm. */
+  animation: callPulse 2s ease-in-out infinite;
+}
+
+@keyframes callPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.call-sheet-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.call-sheet-actions button {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 1rem;
+  cursor: pointer;
+  /* Larger than the 44px minimum: tapped in a hurry, often one-handed. */
+  min-height: 56px;
+}
+
+.call-accept {
+  background: var(--success);
+  color: #06251a;
+}
+
+.call-decline {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+/*
+ * The in-call bar.
+ *
+ * Pinned to the bottom on every screen, so leaving the connections list does
+ * not hide the fact that a microphone is open. That is a safety property, not a
+ * convenience: mute and hang-up must never be more than one tap away, wherever
+ * the user has wandered.
+ */
+.call-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 190;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border-strong);
+  padding: 0.75rem var(--page-padding) calc(0.75rem + env(safe-area-inset-bottom));
+  font-size: 0.9rem;
+}
+
+.call-bar-who {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-bar-who strong {
+  color: var(--text);
+}
+
+.call-bar-dots {
+  animation: callPulse 1.4s ease-in-out infinite;
+}
+
+.call-bar-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.call-bar-actions button {
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.9rem;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.call-bar-actions .mic-off {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.call-bar-actions .call-hangup {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #2a0a10;
+}
+
+/* Nudges: transient, dismissible, never a persistent inbox. */
+.nudge-stack {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top));
+  left: var(--page-padding);
+  right: var(--page-padding);
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.nudge {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  animation: nudgeIn 0.25s ease-out;
+}
+
+@keyframes nudgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+}
+
+.nudge-dismiss {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.call-error {
+  position: fixed;
+  bottom: 5.5rem;
+  left: var(--page-padding);
+  right: var(--page-padding);
+  z-index: 185;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: rgba(224, 107, 127, 0.14);
+  border: 1px solid rgba(224, 107, 127, 0.4);
+  border-radius: var(--radius);
+  color: var(--danger);
+  font-size: 0.85rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.call-error button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------- connections */
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-head h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.connection-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.85rem;
+}
+
+.connection-open {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.person-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.person-name {
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-sub {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.call-button {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.95rem;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.call-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  color: var(--text-faint);
+}
+
+.request-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.request-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.request-actions .button {
+  width: auto;
+  margin-top: 0;
+  padding: 0.5rem 1rem;
+}
+
+/* -------------------------------------------------------------- DM threads */
+
+.thread-page {
+  display: flex;
+  flex-direction: column;
+  /* Fill the viewport so the composer pins to the bottom and the body scrolls. */
+  min-height: 100dvh;
+  padding-bottom: 0;
+}
+
+.thread-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.thread-title {
+  font-weight: 600;
+}
+
+.thread-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+
+.bubble__time {
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  align-self: flex-end;
+}
+
+/* --------------------------------------------------------------- surprises */
+
+.mood-picker,
+.tasks-field {
+  border: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+}
+
+.mood-picker legend,
+.tasks-field legend,
+.surprise-send legend {
+  font-size: 0.9rem;
+  color: var(--text);
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+
+.mood-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.theme-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.theme {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  padding: 0.75rem 0.9rem;
+  margin: 0;
+}
+
+.card--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.theme-label {
+  font-size: 0.95rem;
+}
+
+.theme-blurb {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.tasks-field .input + .input {
+  margin-top: 0.5rem;
+}
+
+.counter {
+  display: block;
+  text-align: right;
+  font-size: 0.7rem;
+  margin-top: 0.3rem;
+}
+
+/*
+ * The code, sized to be read out loud from across a table.
+ * `user-select: all` so one tap selects the whole thing.
+ */
+.code-display {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 2rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+  color: var(--accent);
+  background: var(--bg-input);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 1.25rem 0.5rem;
+  margin: 1rem 0;
+  user-select: all;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.row .button {
+  margin-top: 0;
+}
+
+.reveal {
+  text-align: center;
+}
+
+.reveal-from {
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1rem;
+}
+
+.reveal-message {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  margin-bottom: 1.5rem;
+}
+
+.reveal-personal {
+  border-left: 2px solid var(--accent);
+  margin: 0 0 1.5rem;
+  padding: 0.25rem 0 0.25rem 1rem;
+  text-align: left;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.reveal-tasks {
+  text-align: left;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.reveal-tasks h3 {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 0.6rem;
+}
+
+.reveal-tasks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reveal-tasks label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  /* The whole row is the target, not just the checkbox. */
+  min-height: 32px;
+}
+
+.reveal-tasks .done {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+.surprise-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.surprise-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+}
+
+.surprise-theme {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.surprise-message {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.surprise-opened {
+  font-size: 0.72rem;
+  color: var(--success);
+}
+
+.surprise-waiting {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.empty {
+  text-align: center;
+  padding: 2rem 1.25rem;
+}
+
+.empty h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.empty p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+}
+
+/*
+ * Leave room for the call bar.
+ *
+ * Without this the last item in any list sits underneath it, which is exactly
+ * the item someone is most likely to be reaching for.
+ */
+body:has(.call-bar) .page {
+  padding-bottom: 5.5rem;
+}
+
+.home-nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.home-nav a {
+  flex: 1;
+  text-align: center;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 0.85rem;
+  padding: 0.6rem;
+  text-decoration: none;
+}

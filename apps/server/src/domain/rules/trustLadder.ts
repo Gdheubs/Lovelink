@@ -1,11 +1,13 @@
 import type { User } from '../entities/User.js';
+import type { UserId } from '../values/ids.js';
 import type { Relationship } from '../entities/Relationship.js';
 import type { RoomMember, RoomRole } from '../entities/RoomMember.js';
 import type { Room } from '../entities/Room.js';
 import { atLeast } from '../entities/RoomMember.js';
-import { isCallOpen, isDmOpen } from '../entities/Relationship.js';
+import { isCallAbandoned, isCallOpen, isDmOpen, isRingStale } from '../entities/Relationship.js';
 import { isActive } from '../entities/User.js';
 import { isRestricted } from '../values/trust.js';
+import type { DomainError } from '../errors.js';
 import { AuthorizationError, ConflictError } from '../errors.js';
 
 /**
@@ -54,6 +56,8 @@ export type DenialReason =
   | 'no_shared_room'
   | 'dm_not_open'
   | 'dm_already_open'
+  | 'call_busy'
+  | 'no_pending_call'
   | 'not_a_member'
   | 'not_speaker'
   | 'muted_by_host'
@@ -73,6 +77,8 @@ export const DENIAL_MESSAGES: Readonly<Record<DenialReason, string>> = Object.fr
   no_shared_room: 'You can only message people after you have shared a room with them.',
   dm_not_open: 'You need an open conversation before you can call.',
   dm_already_open: 'You already have a conversation with this person.',
+  call_busy: 'That person is already on a call.',
+  no_pending_call: 'There is no call waiting to be answered.',
   not_a_member: 'You are not in this room.',
   not_speaker: 'Only approved speakers can do that.',
   muted_by_host: 'The host has muted you.',
@@ -81,13 +87,28 @@ export const DENIAL_MESSAGES: Readonly<Record<DenialReason, string>> = Object.fr
   self_target: 'You cannot do that to yourself.',
 });
 
-function denialError(reason: DenialReason): AuthorizationError {
+/**
+ * The error a denial becomes.
+ *
+ * Most denials are authorization failures, but not all of them: "the line is
+ * busy" and "there is no call to answer" are statements about STATE, not about
+ * permission. The caller is entirely allowed to make that call — the world just
+ * is not currently arranged for it. They return 409 rather than 403, and the
+ * distinction is not pedantic: a client shows a retry for one and must not for
+ * the other.
+ */
+function denialError(reason: DenialReason): DomainError {
   const message = DENIAL_MESSAGES[reason];
   switch (reason) {
     case 'not_host':
       return new AuthorizationError(message, 'NOT_HOST', { reason });
     case 'blocked':
       return new AuthorizationError(message, 'BLOCKED', { reason });
+    // Conflicts, not refusals — see above.
+    case 'call_busy':
+      return new ConflictError(message, 'CALL_BUSY', { reason });
+    case 'no_pending_call':
+      return new ConflictError(message, 'NO_PENDING_CALL', { reason });
     case 'no_shared_room':
     case 'dm_not_open':
     case 'trust_restricted':
@@ -322,6 +343,92 @@ export function assertCanInviteToCall(ctx: Omit<DmContext, 'haveSharedRoomSessio
 /** Whether an existing call relationship permits joining the 1:1 media room. */
 export function canJoinCall(relationship: Pick<Relationship, 'state'>): boolean {
   return isCallOpen(relationship);
+}
+
+// ---------------------------------------------------------------------------
+// RUNG 4b — signalling. Not "may these two talk", but "is the line free".
+// ---------------------------------------------------------------------------
+
+/**
+ * `canInviteToCall` above is a question about the RELATIONSHIP; these two are
+ * questions about the MOMENT. Two people can be entirely entitled to call each
+ * other and still be unable to start one, because they are already in it.
+ *
+ * Keeping them apart matters: the trust question has a stable answer that the
+ * UI can render into a button, and the timing question has an answer that
+ * changes second by second and can only be asked at the instant of acting.
+ */
+
+/**
+ * Whether a call may be PLACED right now.
+ *
+ * The state machine is what serialises calls: `call_open` is written when the
+ * phone starts ringing, so a second dial finds the line busy. The staleness
+ * escape hatch is what stops that from becoming permanent when a caller's
+ * browser dies mid-ring — see CALL_RING_TIMEOUT_MS.
+ */
+export function canStartRinging(
+  relationship: Pick<Relationship, 'state' | 'updatedAt' | 'requestedBy'>,
+  now: Date,
+): Decision {
+  if (relationship.state === 'blocked') return deny('blocked');
+
+  // Already ringing, or already talking. Allowed through only when the row is
+  // one of the two kinds of leftover that no longer describes anything real:
+  // a ring nobody answered, or a call nobody ended.
+  if (relationship.state === 'call_open') {
+    const leftover = isRingStale(relationship, now) || isCallAbandoned(relationship, now);
+    return leftover ? ALLOW : deny('call_busy');
+  }
+
+  if (!isDmOpen(relationship)) return deny('dm_not_open');
+  return ALLOW;
+}
+
+/**
+ * Whether THIS user may answer.
+ *
+ * THE ONLY RULE HERE THAT PROTECTS ANYONE: the acceptor must not be the person
+ * who dialled. Without it, a caller could accept their own call, the server
+ * would emit `call:accepted` to the other party, and their client would join
+ * audio they never agreed to. Ringing is consent-neutral; answering is the
+ * consent, and it can only be given by the side being rung.
+ *
+ * Every failure returns the SAME reason. "You cannot accept your own call",
+ * "that call timed out" and "nobody is calling you" are all, from the client's
+ * point of view, the same fact: there is nothing here to answer.
+ */
+export function canAcceptCall(
+  relationship: Pick<Relationship, 'state' | 'updatedAt' | 'requestedBy'>,
+  acceptorId: UserId,
+  now: Date,
+): Decision {
+  if (relationship.state !== 'call_open') return deny('no_pending_call');
+
+  // A row with no recorded initiator cannot prove consent in either
+  // direction, so it grants nothing to anyone.
+  if (relationship.requestedBy === null) return deny('no_pending_call');
+
+  if (relationship.requestedBy === acceptorId) return deny('no_pending_call');
+
+  if (isRingStale(relationship, now)) return deny('no_pending_call');
+
+  return ALLOW;
+}
+
+export function assertCanStartRinging(
+  relationship: Pick<Relationship, 'state' | 'updatedAt' | 'requestedBy'>,
+  now: Date,
+): void {
+  assertDecision(canStartRinging(relationship, now));
+}
+
+export function assertCanAcceptCall(
+  relationship: Pick<Relationship, 'state' | 'updatedAt' | 'requestedBy'>,
+  acceptorId: UserId,
+  now: Date,
+): void {
+  assertDecision(canAcceptCall(relationship, acceptorId, now));
 }
 
 // ---------------------------------------------------------------------------

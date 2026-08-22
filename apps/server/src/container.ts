@@ -12,6 +12,7 @@ import { createDatabase } from './adapters/postgres/db.js';
 import { PostgresRelationshipRepository } from './adapters/postgres/PostgresRelationshipRepository.js';
 import { PostgresReportRepository } from './adapters/postgres/PostgresReportRepository.js';
 import { PostgresRoomRepository } from './adapters/postgres/PostgresRoomRepository.js';
+import { PostgresSurpriseRepository } from './adapters/postgres/PostgresSurpriseRepository.js';
 import { PostgresUserRepository } from './adapters/postgres/PostgresUserRepository.js';
 import { CompositeMessageRepository } from './adapters/messages/CompositeMessageRepository.js';
 import { createRedisClient } from './adapters/redis/client.js';
@@ -127,17 +128,24 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
   });
 
   /**
-   * PHASE BOUNDARY — read this before assuming a port is production-backed.
+   * EVERY DOMAIN PORT NOW HAS A REAL ADAPTER.
    *
-   * Phases 0-2 are delivered. The ports belonging to LATER phases do not have
-   * real adapters yet, so they fall back to the in-memory fakes. That is
-   * deliberate and phase-appropriate (see docs/architecture.md §6), but it MUST
-   * be loud: anything held by those ports disappears on restart.
+   * This used to be a phase-boundary escape hatch: ports whose adapters had not
+   * been built yet fell back to the in-memory fakes, with a loud warning that
+   * their data vanished on restart. As of Phase 5 that list is empty —
+   * `surprises` was the last one, and it is now PostgresSurpriseRepository.
    *
-   * As each phase lands, its adapters replace the corresponding lines here and
-   * the warning shrinks. When the list is empty, delete the fallback.
+   * What remains is ONE placeholder, and it is a different kind of thing: the
+   * realtime transport cannot exist until the socket server does, and the
+   * socket server needs the use cases, which need the ports. `attachRealtime`
+   * closes that cycle a few lines after boot. The fake stands in for the gap
+   * between constructing the container and attaching the transport — measured
+   * in milliseconds, before anything can be listening.
+   *
+   * Do NOT reintroduce a fallback here for a port whose adapter is merely
+   * unfinished. A fake in production wiring is data loss that reports success.
    */
-  const pendingFallbacks = createMemoryPorts({
+  const realtimePlaceholder = createMemoryPorts({
     deterministic: false,
     logger,
     presenceTtlSeconds: config.PRESENCE_TTL_SECONDS,
@@ -186,19 +194,12 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     // server log — usable on a private VPS, never acceptable for public signup.
     notifications: new MemoryNotificationSender(logger, config.AUTH_ECHO_CODE),
 
-    // -- Awaiting their phase: in-memory ------------------------------------
-    surprises: pendingFallbacks.surprises, // Phase 5
+    surprises: new PostgresSurpriseRepository(db),
 
-    // Replaced by attachRealtime once the socket server exists.
-    realtime: pendingFallbacks.realtime,
+    // Replaced by attachRealtime once the socket server exists. See the note
+    // above — this is a construction-order placeholder, not a missing adapter.
+    realtime: realtimePlaceholder.realtime,
   };
-
-  logger.warn(
-    {
-      inMemoryPorts: ['surprises'],
-    },
-    'some ports are still in-memory pending their build phase: that data is lost on restart',
-  );
 
   // Fail at boot rather than on the first user's request. A database that is
   // unreachable at startup is almost always a misconfiguration, and finding out

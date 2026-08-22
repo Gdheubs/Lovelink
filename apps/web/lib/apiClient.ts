@@ -223,6 +223,90 @@ interface AuthResponse {
   isNewAccount: boolean;
 }
 
+export type SurpriseTheme = 'love' | 'sorry' | 'miss' | 'thinking_of_you' | 'congrats';
+export type SurpriseMood = 'angry' | 'sad' | 'meh' | 'happy' | 'soft' | 'tired';
+
+export interface SurpriseTask {
+  text: string;
+  done: boolean;
+}
+
+export interface RevealedSurprise {
+  id: string;
+  displayCode: string;
+  theme: SurpriseTheme;
+  mood: SurpriseMood;
+  /** The prepared message for this theme and mood. */
+  reveal: string;
+  /** What the sender wrote themselves. */
+  personalMessage: string;
+  tasks: SurpriseTask[];
+  from: PublicProfile;
+  openedAt: string;
+}
+
+export interface SentSurprise {
+  id: string;
+  code: string;
+  theme: SurpriseTheme;
+  message: string;
+  opened: boolean;
+  openedAt: string | null;
+  expiresAt: string;
+}
+
+/**
+ * Note what is NOT here: the claim code.
+ *
+ * It has already done its job, and repeating a live code in the recipient's own
+ * history is a way for it to be read off a shared screen. The server does not
+ * send it, and this type says so.
+ */
+export interface ReceivedSurprise {
+  id: string;
+  theme: SurpriseTheme;
+  message: string;
+  mood: SurpriseMood | null;
+  tasks: SurpriseTask[];
+  openedAt: string | null;
+}
+
+export type RelationshipState = 'none' | 'dm_requested' | 'dm_open' | 'call_open' | 'blocked';
+
+/**
+ * What the server says this viewer may do with this person.
+ *
+ * USE IT TO DECIDE WHICH BUTTONS EXIST, AND NOTHING ELSE. It is not
+ * authorization — every action re-checks the same rule server-side, because a
+ * client can send whatever it likes regardless of what was rendered.
+ */
+export interface LadderView {
+  canRequestDm: boolean;
+  canSendDm: boolean;
+  canCall: boolean;
+}
+
+export interface Connection {
+  user: PublicProfile;
+  state: RelationshipState;
+  since: string;
+  can: LadderView;
+}
+
+export interface ConnectionsView {
+  connections: Connection[];
+  /** People waiting on an answer FROM you. Outgoing requests are never listed. */
+  incomingRequests: Connection[];
+}
+
+export interface DmMessage {
+  id: string;
+  roomId: string | null;
+  from: PublicProfile;
+  text: string;
+  sentAt: string;
+}
+
 export const api = {
   /**
    * Ask for a login code.
@@ -311,6 +395,103 @@ export const api = {
 
   async getRoom(id: string): Promise<RoomSummary> {
     return request(`/rooms/${encodeURIComponent(id)}`);
+  },
+
+  // -- surprises -----------------------------------------------------------
+
+  async createSurprise(input: {
+    theme: SurpriseTheme;
+    message: string;
+    tasks?: string[];
+  }): Promise<{ id: string; code: string; theme: SurpriseTheme; expiresAt: string }> {
+    return request('/surprises', { method: 'POST', body: input });
+  },
+
+  /**
+   * Open one.
+   *
+   * `mood` is required, because it is what selects the message — the sender
+   * chose what to say days ago and cannot know how the reader feels now.
+   *
+   * A wrong code, an expired code and one somebody else already opened are all
+   * the same 404 from the server, deliberately. Do not try to tell them apart
+   * in the UI: the distinction is exactly what would make guessing worthwhile.
+   */
+  async redeemSurprise(input: { code: string; mood: SurpriseMood }): Promise<RevealedSurprise> {
+    return request('/surprises/redeem', { method: 'POST', body: input });
+  },
+
+  async toggleSurpriseTask(
+    surpriseId: string,
+    taskIndex: number,
+    done: boolean,
+  ): Promise<{ id: string; tasks: SurpriseTask[] }> {
+    return request(`/surprises/${encodeURIComponent(surpriseId)}/tasks`, {
+      method: 'PATCH',
+      body: { taskIndex, done },
+    });
+  },
+
+  async listMySurprises(): Promise<{ sent: SentSurprise[]; received: ReceivedSurprise[] }> {
+    return request('/me/surprises');
+  },
+
+  // -- connections ---------------------------------------------------------
+
+  async listConnections(): Promise<ConnectionsView> {
+    return request('/me/connections');
+  },
+
+  /**
+   * Ask to message someone.
+   *
+   * Resolves as soon as the request is accepted for delivery. It does NOT tell
+   * you whether they have seen it or answered — outgoing requests are invisible
+   * by design, because knowing they have not replied is an invitation to ask
+   * again.
+   */
+  async requestDm(userId: string): Promise<void> {
+    await request(`/users/${encodeURIComponent(userId)}/dm-request`, { method: 'POST' });
+  },
+
+  async acceptDm(userId: string): Promise<void> {
+    await request(`/users/${encodeURIComponent(userId)}/dm-accept`, { method: 'POST' });
+  },
+
+  async declineDm(userId: string): Promise<void> {
+    await request(`/users/${encodeURIComponent(userId)}/dm-decline`, { method: 'POST' });
+  },
+
+  async readDmThread(
+    userId: string,
+    options: { limit?: number; before?: string } = {},
+  ): Promise<{ messages: DmMessage[]; nextCursor: string | null }> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.before !== undefined) params.set('before', options.before);
+    const query = params.toString();
+
+    return request(
+      `/users/${encodeURIComponent(userId)}/messages${query.length > 0 ? `?${query}` : ''}`,
+    );
+  },
+
+  async sendDm(userId: string, text: string): Promise<DmMessage> {
+    return request(`/users/${encodeURIComponent(userId)}/messages`, {
+      method: 'POST',
+      body: { text },
+    });
+  },
+
+  /**
+   * Hang up, or decline a ringing call.
+   *
+   * Offered over HTTP as well as the socket precisely because it must work when
+   * the socket is what has gone wrong. Always succeeds, including when there
+   * was no call — hanging up twice is normal.
+   */
+  async endCall(userId: string): Promise<void> {
+    await request(`/users/${encodeURIComponent(userId)}/call-end`, { method: 'POST' });
   },
 
   async health(): Promise<{ status: string; persistence: string }> {

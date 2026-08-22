@@ -213,6 +213,91 @@ export function registerRoomHandlers(context: HandlerContext): void {
     });
   });
 
+  // -- connections: DM (rung 3) ---------------------------------------------
+
+  /**
+   * The whole DM ladder over sockets.
+   *
+   * NOTHING HERE RETURNS A RESULT TO THE SENDER except `dm:message`, and that
+   * is on purpose. `dm:request` succeeding tells the requester only that the
+   * request was accepted for delivery — never whether the other person exists,
+   * is online, or has already blocked them. Each of those would be a way to
+   * probe someone who has deliberately made themselves unreachable.
+   *
+   * The one visible failure is a domain error, and the ladder's denial
+   * messages are written to be uninformative in exactly this way: a block and
+   * an inactive account both say "That person is not available."
+   */
+  on(context, 'dm:request', async (payload, user) => {
+    await useCases.requestDm.execute(user, asUserId(payload.userId));
+  });
+
+  on(context, 'dm:accept', async (payload, user) => {
+    await useCases.acceptDm.execute(user, asUserId(payload.userId));
+  });
+
+  on(context, 'dm:decline', async (payload, user) => {
+    // Silent by design — see DeclineDm. The requester is never told, so there
+    // is nothing to emit to anyone but the decliner's own confirmation, which
+    // their client already rendered optimistically.
+    await useCases.declineDm.execute(user, asUserId(payload.userId));
+  });
+
+  on(context, 'dm:message', async (payload, user) => {
+    // Delivery to BOTH parties happens inside the use case, so the sender's
+    // other tabs receive it too. Nothing is emitted from here.
+    await useCases.sendDm.execute(user, {
+      toUserId: asUserId(payload.userId),
+      text: payload.text,
+    });
+  });
+
+  // -- connections: 1:1 call (rung 4) ---------------------------------------
+
+  /**
+   * Call signalling.
+   *
+   * WHY THE TOKEN GOES BACK OVER THE SOCKET AND NOT AS A BROADCAST
+   * --------------------------------------------------------------
+   * `socket.emit` here targets THIS connection only. A media token is a
+   * credential to open a microphone in a two-person room, and it belongs to
+   * exactly one device — the one that asked. Sending it via `emitToUser` would
+   * hand it to every tab that person has open, including ones sitting on a
+   * public machine they walked away from.
+   *
+   * The corresponding event for the OTHER party (`call:accepted`) is emitted
+   * from inside the use case through RealtimeTransport, because that one is
+   * genuinely per-user: whichever of their devices is ringing should answer.
+   */
+  on(context, 'call:invite', async (payload, user) => {
+    // Emits NOTHING back. The caller is ringing, not connected: their own
+    // token arrives in `call:accepted` if and when the other person answers.
+    // Acknowledging with a token here would both leak a credential for a call
+    // nobody accepted and make the caller's UI show a connected call.
+    await useCases.inviteToCall.execute(user, asUserId(payload.userId));
+  });
+
+  on(context, 'call:accept', async (payload, user) => {
+    const session = await useCases.acceptCall.execute(user, asUserId(payload.userId));
+
+    socket.emit('call:accepted', {
+      withUserId: session.withUserId,
+      callRoomId: session.callRoomId,
+      mediaToken: {
+        token: session.mediaToken.token,
+        url: session.mediaToken.url,
+        roomName: session.mediaToken.roomName,
+        expiresAt: session.mediaToken.expiresAt.toISOString(),
+      },
+    });
+  });
+
+  on(context, 'call:decline', async (payload, user) => {
+    // Decline and hang up are the same operation — release the line, tell the
+    // other person. See EndCall.
+    await useCases.endCall.execute(user, asUserId(payload.userId));
+  });
+
   /**
    * Disconnect cleanup.
    *

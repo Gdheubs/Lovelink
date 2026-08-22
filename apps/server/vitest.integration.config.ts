@@ -15,6 +15,10 @@ export default defineConfig({
   test: {
     name: 'integration',
     include: ['tests/adapters/**/*.test.ts'],
+    // Loads .env so the reachability probes target the database this project
+    // is configured for, rather than whatever happens to be on the default
+    // port. See the file for the silent-skip incident that prompted it.
+    setupFiles: ['tests/setup.integration.ts'],
     environment: 'node',
     testTimeout: 30_000,
     hookTimeout: 30_000,

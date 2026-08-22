@@ -21,8 +21,11 @@
  * It is destructive in the sense that it creates real accounts, so point it at
  * a staging environment or a fresh database, never at production.
  *
- * The journey grows with the build phases. Steps for phases that are not built
- * yet are listed as PENDING at the bottom, so this file doubles as a checklist.
+ * SCOPE: this script covers the journey a single account walks alone — health,
+ * registration, the age gate, profile, auth lifecycle. Journeys that need
+ * several accounts and live sockets have their own scripts, listed at the
+ * bottom, because folding them in here would make one failure impossible to
+ * locate among sixty passing lines.
  */
 
 const BASE_URL = process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:4000';
@@ -297,14 +300,20 @@ async function main(): Promise<void> {
   // check rather than being half-tested over HTTP here.
   process.stdout.write('       (joining, presence and chat: see npm run room-check)\n');
 
-  // -- pending phases --------------------------------------------------------
-  step('pending (not yet built)');
-  for (const pending of [
-    'Phase 3: raise a hand, host approves, publish audio',
-    'Phase 4: submit a report, review it, ban, verify the socket drops',
-    'Phase 5: send a surprise, redeem it, open a DM, place a 1:1 call',
+  // -- journeys with their own scripts ---------------------------------------
+  //
+  // Each of these needs several accounts, live sockets and real timing, and
+  // folding them in here would make one failure impossible to locate. They are
+  // separate runs, not missing coverage — and claiming "not yet built", as this
+  // block did until Phase 5 landed, is exactly the kind of stale statement that
+  // makes a green smoke test worth less than nothing.
+  step('covered by dedicated checks');
+  for (const [journey, command] of [
+    ['rooms, presence and chat', 'npm run room-check'],
+    ['reporting, review and ban', 'npm run safety-check'],
+    ['surprise, DM and 1:1 call', 'npm run ladder-check'],
   ]) {
-    process.stdout.write(`  --   ${pending}\n`);
+    process.stdout.write(`  --   ${journey}: ${command}\n`);
   }
 
   // -- summary ---------------------------------------------------------------

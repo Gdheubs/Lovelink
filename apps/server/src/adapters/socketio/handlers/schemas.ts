@@ -81,6 +81,7 @@ export const socketSchemas = {
   // -- Phase 5 -------------------------------------------------------------
   'dm:request': z.object({ userId }),
   'dm:accept': z.object({ userId }),
+  'dm:decline': z.object({ userId }),
   'dm:message': z.object({ userId, text: z.string().min(1).max(2000) }),
   'call:invite': z.object({ userId }),
   'call:accept': z.object({ userId }),

@@ -266,17 +266,68 @@ exists.
 | **0 — Skeleton**          | `npm run dev:memory` boots both servers with zero external services | ✅ **PASS**        | Boots; `/healthz` + `/readyz` green; 0 boot errors                                                                                                                                                                                                         |
 | **1 — Identity**          | Two real users can register and log in **on the deployed VPS**      | 🟡 **PARTIAL**     | Verified end-to-end against real Postgres/Redis locally (37/37 smoke, including the 18+ gate refusing a 15-year-old with `UNDERAGE` and 0 underage rows reaching the database). **VPS deployment not performed** — no VPS is available in this environment |
 | **2 — Text rooms**        | 10 users sit in a room and chat with correct presence               | ✅ **PASS**        | `room-check` 13/13 with 10 real websockets, against both backends                                                                                                                                                                                          |
-| **3 — Voice**             | Host + 3 speakers + N listeners on real phones over mobile data     | ❌ **NOT STARTED** | —                                                                                                                                                                                                                                                          |
-| **4 — Safety**            | Reported user reviewed and banned; socket drops within seconds      | ❌ **NOT STARTED** | —                                                                                                                                                                                                                                                          |
-| **5 — Surprise + ladder** | Meet → surprise → DM → 1:1 call                                     | ❌ **NOT STARTED** | —                                                                                                                                                                                                                                                          |
-| **6 — Retention**         | New user's first five minutes smooth on a mid-range Android         | ❌ **NOT STARTED** | —                                                                                                                                                                                                                                                          |
+| **3 — Voice**             | Host + 3 speakers + N listeners on real phones over mobile data     | 🟡 **PARTIAL**     | `room-check` 20/20 including voice against real LiveKit; listen-only tokens, raise-hand → approve → publish, revoke-on-demote all verified. **Real phones on mobile data not performed** — no handsets available |
+| **4 — Safety**            | Reported user reviewed and banned; socket drops within seconds      | ✅ **PASS**        | `safety-check` 18/18 against real services; ban severs the socket, tokens die, reconnect refused, ban liftable                                                                                                  |
+| **5 — Surprise + ladder** | Meet → surprise → DM → 1:1 call                                     | ✅ **PASS**        | `ladder-check` 43/43 against real Postgres/Redis/LiveKit; full journey plus every rung proven unskippable                                                                                                       |
+| **6 — Retention**         | New user's first five minutes smooth on a mid-range Android         | ❌ **NOT STARTED** | —                                                                                                                                                                                                              |
 
-**Resume point: Phase 3 (Voice).**
+**Resume point: Phase 6 (Retention & polish).**
 
-Phase 1 is marked partial rather than failed because every criterion that can be
-tested without a VPS passes; the deployment itself is an environment
-prerequisite, not a code defect. This is tracked in `docs/final-acceptance.md`
-along with the other steps requiring physical hardware.
+Phases 1 and 3 are marked partial rather than failed because every criterion
+that can be tested without the hardware passes; the deployment and the handsets
+are environment prerequisites, not code defects. Both are tracked in
+`docs/final-acceptance.md` along with the other steps requiring physical
+hardware, and neither is waived — phase 6's B4 gate is where they are finally
+discharged.
+
+### Findings from phases 3–5
+
+Recorded here because the fix protocol applies to work done after the audit as
+well as during it: a failing test first, then the smallest fix that respects the
+ring boundaries.
+
+- **F9 — One kick locked a new account out of the entire platform.** `kicked_from_room`
+  was −10 against a starting balance of 0, so a single host's unilateral action
+  pushed a brand-new user to `restricted` and barred them from *every* room —
+  contradicting the room-scoped design of a kick. Found by a test asserting a
+  kicked user could still join a *different* room. Fixed by giving registration
+  an explicit `account_created: +10` ledger entry and softening
+  `kicked_from_room` to −5, so three separate hosts must agree before an account
+  is restricted; tier thresholds moved to 25/60 so the starting balance did not
+  render every new signup as "Regular".
+- **F10 — The integration suite was silently skipping every adapter test.**
+  `tests/adapters/support.ts` falls back to `localhost:5432` when `DATABASE_URL`
+  is unset, and vitest never loaded `.env`. This project runs Postgres on 5433
+  precisely because the machine already had something on 5432, so the probe
+  connected to the wrong database and 36 assertions reported as green "skipped".
+  A harness that looks like it ran is the worst possible failure. Fixed with
+  `tests/setup.integration.ts`, which loads `.env` exactly as `config.ts` does;
+  the full adapter suite then ran and passed 193/193, confirming nothing had
+  been hiding behind the skip.
+- **F11 — `CALL_BUSY` / `NO_PENDING_CALL` never reached the client.** The denial
+  reasons were added but not mapped in `denialError`, so both fell through to
+  `FORBIDDEN` — defeating the reason for adding them. Caught by an app test
+  asserting the code. The follow-on was caught by typecheck: they had been
+  modelled as `AuthorizationError`, but "the line is busy" is a state conflict,
+  not a permission failure. Both are now `ConflictError` (409), so a client can
+  offer a retry for one and must not for the other.
+- **F12 — Dialling minted a publishing credential.** The first draft of
+  `InviteToCall` returned a media token and the socket edge echoed
+  `call:accepted` to the caller. That told the caller's UI a ringing phone had
+  connected, and left a live microphone credential in the browser of every call
+  nobody answered. `AcceptCall` is now the only place in the protocol that
+  issues one, and it issues both at the single moment consent exists. Covered by
+  `ladder-check`: *"the ring carries NO media token"*, *"the caller is not told
+  the call connected merely for dialling"*.
+- **F13 — Smoke test claimed built phases were "not yet built".** The pending
+  block still listed phases 3–5. A green smoke test that misreports scope is
+  worth less than nothing; replaced with pointers to the dedicated check
+  scripts.
+- **F14 — `/me/surprises` reached past the application ring.** The route read
+  `ports.surprises` directly. Extracted to `ListMySurprises`, because what the
+  two views omit (a sender never learns the recipient's mood; a recipient never
+  sees the claim code again) is a policy decision, and policy in a route file is
+  policy that exists once per edge.
 
 ---
 
