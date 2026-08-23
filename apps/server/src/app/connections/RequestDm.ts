@@ -77,6 +77,29 @@ export class RequestDm {
       from: toPublicProfile(actor),
     });
 
+    /*
+     * A request can wait, so this is NOT urgent: no vibration, no persistence,
+     * and a TTL measured in hours. Someone asking to message you is a thing to
+     * find when you pick your phone up, not a reason to make it buzz on a
+     * table.
+     */
+    void this.ports.pushSubscriptions
+      .listForUser(targetId)
+      .then(async (subscriptions) => {
+        if (subscriptions.length === 0) return;
+        const result = await this.ports.push.send(targetId, subscriptions, {
+          title: actor.displayName,
+          body: 'would like to message you',
+          url: '/connections',
+          tag: 'dm-request',
+          urgent: false,
+        });
+        if (result.expired.length > 0) {
+          await this.ports.pushSubscriptions.removeMany(result.expired);
+        }
+      })
+      .catch(() => undefined);
+
     this.ports.metrics.increment('dm.requested');
     this.ports.logger.info({ actorId: actor.id, targetId }, 'dm requested');
   }

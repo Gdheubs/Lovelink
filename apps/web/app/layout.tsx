@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '../lib/AuthProvider';
 import { SignallingProvider } from '../lib/SignallingProvider';
+import { PwaProvider } from '../lib/PwaProvider';
 import './globals.css';
 
 /**
@@ -48,7 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             reach the user on whatever screen they happen to be on. See
             SignallingProvider for why this cannot live on a page.
           */}
-          <SignallingProvider>{children}</SignallingProvider>
+          <PwaProvider>
+            <SignallingProvider>{children}</SignallingProvider>
+          </PwaProvider>
         </AuthProvider>
       </body>
     </html>

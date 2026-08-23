@@ -334,6 +334,30 @@ export class RedisPresenceStore implements PresenceStore {
       .sort((a, b) => (a.handRaisedAtMs ?? 0) - (b.handRaisedAtMs ?? 0));
   }
 
+  async countLive(): Promise<{ entries: number; users: number; rooms: number }> {
+    // Scores at or below now are expired but not yet reaped — the reaper runs
+    // on an interval, so they are still in the index. Excluding them here means
+    // the dashboard agrees with what people can actually see in a room, rather
+    // than with what has not been cleaned up yet.
+    const live = await this.redis.zrangebyscore(
+      KEY.presenceExpiryIndex,
+      `(${this.clock.nowMs()}`,
+      '+inf',
+    );
+
+    const users = new Set<string>();
+    const rooms = new Set<string>();
+
+    for (const value of live) {
+      const parsed = RedisPresenceStore.parseMemberKey(value);
+      if (parsed === null) continue;
+      users.add(parsed.userId);
+      rooms.add(parsed.roomId);
+    }
+
+    return { entries: live.length, users: users.size, rooms: rooms.size };
+  }
+
   async reapExpired(): Promise<readonly PresenceEntry[]> {
     const expired = (await this.redis.eval(
       REAP_SCRIPT,

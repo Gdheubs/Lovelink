@@ -16,6 +16,10 @@ import { MemoryRelationshipRepository } from './MemoryRelationshipRepository.js'
 import { MemoryReportRepository } from './MemoryReportRepository.js';
 import { MemoryRoomRepository } from './MemoryRoomRepository.js';
 import { MemorySurpriseRepository } from './MemorySurpriseRepository.js';
+import { MemoryPushSender } from './MemoryPushSender.js';
+import { MemoryObjectStore } from './MemoryObjectStore.js';
+import { MemoryJobQueue } from './MemoryJobQueue.js';
+import { MemoryPushSubscriptionRepository } from './MemoryPushSubscriptionRepository.js';
 import { MemoryTokenService } from './MemoryTokenService.js';
 import { MemoryUserRepository } from './MemoryUserRepository.js';
 
@@ -81,6 +85,10 @@ export interface MemoryPorts extends Ports {
   readonly users: MemoryUserRepository;
   readonly rooms: MemoryRoomRepository;
   readonly surprises: MemorySurpriseRepository;
+  readonly pushSubscriptions: MemoryPushSubscriptionRepository;
+  readonly push: MemoryPushSender;
+  readonly objects: MemoryObjectStore;
+  readonly jobs: MemoryJobQueue;
   readonly reports: MemoryReportRepository;
   readonly relationships: MemoryRelationshipRepository;
   readonly messages: MemoryMessageRepository;
@@ -150,6 +158,10 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
   const tokens = new MemoryTokenService(clock, ids, accessTokenTtlSeconds, refreshTokenTtlSeconds);
   const challenges = new MemoryAuthChallengeStore(clock);
   const notifications = new MemoryNotificationSender(logger, echoLoginCodes);
+  const pushSubscriptions = new MemoryPushSubscriptionRepository();
+  const push = new MemoryPushSender(logger);
+  const objects = new MemoryObjectStore();
+  const jobs = new MemoryJobQueue();
 
   return {
     clock,
@@ -159,6 +171,10 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
     users,
     rooms,
     surprises,
+    pushSubscriptions,
+    push,
+    objects,
+    jobs,
     reports,
     relationships,
     messages,
@@ -175,6 +191,10 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
       users.clear();
       rooms.clear();
       surprises.clear();
+      pushSubscriptions.clear();
+      push.clear();
+      objects.clear();
+      jobs.clear();
       reports.clear();
       relationships.clear();
       messages.clear();

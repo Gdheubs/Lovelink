@@ -13,9 +13,13 @@ import { PostgresRelationshipRepository } from './adapters/postgres/PostgresRela
 import { PostgresReportRepository } from './adapters/postgres/PostgresReportRepository.js';
 import { PostgresRoomRepository } from './adapters/postgres/PostgresRoomRepository.js';
 import { PostgresSurpriseRepository } from './adapters/postgres/PostgresSurpriseRepository.js';
+import { PostgresPushSubscriptionRepository } from './adapters/postgres/PostgresPushSubscriptionRepository.js';
+import { WebPushSender } from './adapters/push/WebPushSender.js';
+import { R2ObjectStore } from './adapters/storage/R2ObjectStore.js';
+import { MemoryJobQueue } from './adapters/memory/MemoryJobQueue.js';
 import { PostgresUserRepository } from './adapters/postgres/PostgresUserRepository.js';
 import { CompositeMessageRepository } from './adapters/messages/CompositeMessageRepository.js';
-import { createRedisClient } from './adapters/redis/client.js';
+import { createRedisClient, type RedisClient } from './adapters/redis/client.js';
 import { RedisAuthChallengeStore } from './adapters/redis/RedisAuthChallengeStore.js';
 import { RedisEventBus } from './adapters/redis/RedisEventBus.js';
 import { RedisMetrics } from './adapters/redis/RedisMetrics.js';
@@ -48,6 +52,25 @@ export interface ContainerOptions {
 
 export interface Container {
   readonly ports: Ports;
+
+  /**
+   * A dedicated publisher/subscriber pair for the Socket.io adapter, when one
+   * is available.
+   *
+   * WHY THE SOCKET SERVER CANNOT JUST REUSE THE COMMAND CONNECTION
+   * --------------------------------------------------------------
+   * A Redis connection in subscriber mode may issue no other commands, so
+   * pub/sub needs its own. The container already keeps that pair for the event
+   * bus, and handing the same two out avoids opening four connections to do the
+   * work of two — which matters on managed Redis, where connections are the
+   * thing you are billed and capped on.
+   *
+   * Null in memory mode, where there is no Redis and only one process.
+   */
+  readonly socketAdapterClients: {
+    readonly pub: RedisClient;
+    readonly sub: RedisClient;
+  } | null;
 
   /**
    * Supply the realtime transport once it exists.
@@ -98,6 +121,9 @@ function createMemoryContainer({ config, logger }: ContainerOptions): Container 
 
   return {
     ports,
+    // No Redis, and nothing to fan out to: memory mode is one process by
+    // definition.
+    socketAdapterClients: null,
     attachRealtime(transport) {
       ports.realtime = transport;
     },
@@ -125,6 +151,9 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     connectionString: config.DATABASE_URL,
     poolMax: config.DATABASE_POOL_MAX,
     logger,
+    ssl: config.DATABASE_SSL
+      ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED }
+      : false,
   });
 
   /**
@@ -195,6 +224,53 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
     notifications: new MemoryNotificationSender(logger, config.AUTH_ECHO_CODE),
 
     surprises: new PostgresSurpriseRepository(db),
+    pushSubscriptions: new PostgresPushSubscriptionRepository(db),
+
+    // Cloudflare R2. Optional: with no bucket the store reports itself
+    // unavailable and nothing that would need it is offered.
+    objects: new R2ObjectStore(
+      config.R2_ACCOUNT_ID.length > 0 &&
+      config.R2_ACCESS_KEY_ID.length > 0 &&
+      config.R2_SECRET_ACCESS_KEY.length > 0 &&
+      config.R2_BUCKET.length > 0
+        ? {
+            accountId: config.R2_ACCOUNT_ID,
+            accessKeyId: config.R2_ACCESS_KEY_ID,
+            secretAccessKey: config.R2_SECRET_ACCESS_KEY,
+            bucket: config.R2_BUCKET,
+            publicBaseUrl: config.R2_PUBLIC_BASE_URL,
+          }
+        : null,
+      logger,
+    ),
+
+    /*
+     * IN-PROCESS FOR NOW, and deliberately the one exception to the rule above
+     * this block.
+     *
+     * Nothing enqueues a job yet: the port exists so the video pipeline has a
+     * boundary to be built against, not because there is work to run. When
+     * there is, this becomes a Redis-backed queue and the workers consume it —
+     * a change to this line and one new adapter.
+     */
+    jobs: new MemoryJobQueue(),
+
+    // Push is OPTIONAL. With no VAPID keys the sender reports no public key,
+    // clients never offer to subscribe, and every feature behaves exactly as
+    // it does with notifications switched off — which is the state local
+    // development runs in.
+    push: new WebPushSender(
+      config.VAPID_PUBLIC_KEY.length > 0 &&
+      config.VAPID_PRIVATE_KEY.length > 0 &&
+      config.VAPID_SUBJECT.length > 0
+        ? {
+            publicKey: config.VAPID_PUBLIC_KEY,
+            privateKey: config.VAPID_PRIVATE_KEY,
+            subject: config.VAPID_SUBJECT,
+          }
+        : null,
+      logger,
+    ),
 
     // Replaced by attachRealtime once the socket server exists. See the note
     // above — this is a construction-order placeholder, not a missing adapter.
@@ -214,6 +290,11 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
 
   return {
     ports,
+    // Duplicated rather than shared with the bus: Socket.io's adapter takes
+    // ownership of the connections it is given, and the bus is still using
+    // those. Two more connections is the price of not having the two systems
+    // interfere.
+    socketAdapterClients: { pub: redisPublisher.duplicate(), sub: redisSubscriber.duplicate() },
     attachRealtime(transport) {
       ports.realtime = transport;
     },

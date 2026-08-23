@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Loverlink — offline</title>
+    <!--
+      Everything inline, because this page is shown precisely when the network
+      is not available. A stylesheet link here would be a blank page.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background: #100a18;
+        color: #f4eefb;
+        font:
+          16px/1.6 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        text-align: center;
+      }
+      .mark {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1.5rem;
+        border-radius: 50%;
+        border: 2px solid rgba(217, 140, 174, 0.35);
+        display: grid;
+        place-items: center;
+      }
+      .core {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #c4527d;
+      }
+      h1 {
+        font-size: 1.15rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        color: #a996bd;
+        margin: 0 auto 1.75rem;
+        max-width: 22rem;
+        font-size: 0.95rem;
+      }
+      button {
+        background: linear-gradient(135deg, #c4527d, #8d2f56);
+        color: #fff;
+        border: none;
+        border-radius: 14px;
+        font: inherit;
+        font-size: 1rem;
+        padding: 0.85rem 2rem;
+        min-height: 44px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark"><div class="core"></div></div>
+      <h1>You are offline</h1>
+      <!--
+        Says what is true and what to do, and nothing else. No apology, no
+        cartoon, no "oops" — someone whose train just went into a tunnel does
+        not need to be entertained about it.
+      -->
+      <p>
+        Rooms need a connection, so there is nothing to listen to until you have one. Everything
+        will be here when you are back.
+      </p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

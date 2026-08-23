@@ -2,6 +2,8 @@ import type { User } from '../../domain/entities/User.js';
 import type { TrustEvent } from '../../domain/entities/TrustEvent.js';
 import type { Ports } from '../../domain/ports/index.js';
 import type { TrustTier } from '../../domain/values/trust.js';
+import type { StreakView } from '../../domain/values/streaks.js';
+import { streakAsOf } from '../../domain/values/streaks.js';
 import { trustTier } from '../../domain/values/trust.js';
 
 /**
@@ -34,6 +36,10 @@ export interface MyProfile {
   readonly trustScore: number;
   readonly tier: TrustTier;
   readonly memberSince: string;
+  /** IANA zone the streak's day boundaries are computed in. */
+  readonly timeZone: string;
+  /** Live, computed from the stored state and now. Never the raw column. */
+  readonly streak: StreakView;
   /** The ledger behind `trustScore`, newest first. */
   readonly trustHistory: readonly {
     readonly delta: number;
@@ -60,6 +66,10 @@ export class GetMyProfile {
       trustScore: user.trustScore,
       tier: trustTier(user.trustScore),
       memberSince: user.createdAt.toISOString(),
+      timeZone: user.timeZone,
+      // Computed, never the stored column: `streak.current` goes stale the
+      // moment a day passes without a show-up. See domain/values/streaks.ts.
+      streak: streakAsOf(user.streak, this.ports.clock.now(), user.timeZone),
       trustHistory: events.map((event) => ({
         delta: event.delta,
         reason: event.reason,

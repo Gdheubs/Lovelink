@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { HttpServerDeps } from '../server.js';
 import type { TokenPair } from '../../../domain/ports/TokenService.js';
 import { requireAuth, actorOf } from '../authGuard.js';
+import { clientIp } from '../clientIp.js';
 
 /**
  * Authentication routes.
@@ -94,7 +95,7 @@ export async function registerAuthRoutes(
 
     const result = await useCases.requestLoginCode.execute({
       identifier: body.identifier,
-      ip: clientIp(request),
+      ip: clientIp(request, deps.config.TRUST_PROXY),
     });
 
     return reply.status(202).send({
@@ -118,7 +119,7 @@ export async function registerAuthRoutes(
     const result = await useCases.verifyLoginCode.execute({
       identifier: body.identifier,
       code: body.code,
-      ip: clientIp(request),
+      ip: clientIp(request, deps.config.TRUST_PROXY),
       ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
       ...(body.dob === undefined ? {} : { dob: body.dob }),
     });
@@ -173,16 +174,4 @@ export async function registerAuthRoutes(
   });
 }
 
-/**
- * The caller's IP, for rate limiting only.
- *
- * Fastify's `trustProxy` resolves `x-forwarded-for` for us, which is correct
- * behind Cloudflare. Note the consequence: if the app is ever exposed directly,
- * a client could spoof the header and evade the per-IP limit. The per-identifier
- * limit is the one that actually protects a victim from being bombed; the
- * per-IP limit protects our SMS bill, and is defence in depth rather than the
- * primary control.
- */
-function clientIp(request: FastifyRequest): string {
-  return request.ip;
-}
+

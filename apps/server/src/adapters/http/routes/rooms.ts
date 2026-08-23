@@ -28,6 +28,15 @@ const createBody = z.object({
   title: z.string().min(1).max(120),
   category: z.enum(ROOM_CATEGORIES as unknown as [string, ...string[]]),
   maxSpeakers: z.number().int().min(1).max(MAX_SPEAKERS_CEILING).optional(),
+  /**
+   * A five-field cron expression for a recurring room.
+   *
+   * Bounded generously; the DOMAIN decides whether it is a schedule that can
+   * actually fire, and refuses it with a message naming what is supported. The
+   * cap here only stops a megabyte of text reaching the parser.
+   */
+  scheduleCron: z.string().min(1).max(120).optional(),
+  scheduleTimeZone: z.string().min(1).max(64).optional(),
 });
 
 const listQuery = z.object({
@@ -71,6 +80,8 @@ export async function registerRoomRoutes(
       title: body.title,
       category: body.category,
       ...(body.maxSpeakers === undefined ? {} : { maxSpeakers: body.maxSpeakers }),
+      ...(body.scheduleCron === undefined ? {} : { scheduleCron: body.scheduleCron }),
+      ...(body.scheduleTimeZone === undefined ? {} : { scheduleTimeZone: body.scheduleTimeZone }),
     });
 
     return reply.status(201).send({
@@ -82,6 +93,12 @@ export async function registerRoomRoutes(
       maxSpeakers: room.maxSpeakers,
       status: room.status,
       createdAt: room.createdAt.toISOString(),
+      // Echoed back so a host can SEE when their recurring room will first
+      // open. A schedule accepted silently is one they cannot check.
+      isScheduled: room.isScheduled,
+      scheduleCron: room.scheduleCron,
+      scheduleTimeZone: room.scheduleTimeZone,
+      nextOccurrenceAt: room.nextOccurrenceAt?.toISOString() ?? null,
     });
   });
 

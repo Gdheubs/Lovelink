@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { HttpServerDeps } from '../server.js';
 import type { QueuedReport } from '../../../app/index.js';
+import type { DashboardView } from '../../../app/admin/GetDashboard.js';
 import { asReportId, asUserId } from '../../../domain/values/ids.js';
 import { AuthorizationError } from '../../../domain/errors.js';
 
@@ -56,7 +57,9 @@ export async function registerAdminRoutes(
   app: FastifyInstance,
   deps: HttpServerDeps,
 ): Promise<void> {
-  const { config, ports, useCases } = deps;
+  // No `ports` here on purpose: since the dashboard moved into a use case,
+  // this edge reaches only for use cases and config — which is the rule.
+  const { config, useCases } = deps;
 
   /**
    * Gate the whole surface on the shared token.
@@ -156,17 +159,16 @@ export async function registerAdminRoutes(
     return reply.send({ ok: true });
   });
 
-  /** Live counters for the dashboard. */
+  /**
+   * The dashboard, as JSON.
+   *
+   * Same use case as the HTML page below, so the two cannot disagree about what
+   * the numbers are — a monitoring script polling this and a person reading the
+   * page must never see different answers.
+   */
   app.get('/admin/metrics', async (request, reply) => {
     requireAdminToken(request);
-
-    const [totals, openReports, reviewing] = await Promise.all([
-      ports.metrics.snapshot(),
-      ports.reports.countByStatus('open'),
-      ports.reports.countByStatus('reviewing'),
-    ]);
-
-    return reply.send({ totals, openReports, reviewing });
+    return reply.send(await useCases.getDashboard.execute());
   });
 
   // -- the page -------------------------------------------------------------
@@ -189,8 +191,9 @@ export async function registerAdminRoutes(
       queueError = error instanceof Error ? error.message : 'Could not load the queue.';
     }
 
-    const openCount = await ports.reports.countByStatus('open');
-    const reviewingCount = await ports.reports.countByStatus('reviewing');
+    // The SAME use case the JSON endpoint calls, so a monitoring script and a
+    // person reading this page can never see different numbers.
+    const dashboard = await useCases.getDashboard.execute();
 
     return (
       reply
@@ -200,7 +203,7 @@ export async function registerAdminRoutes(
         // report note has nothing to execute with.
         .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'")
         .header('referrer-policy', 'no-referrer')
-        .send(renderAdminPage({ queue, queueError, openCount, reviewingCount, token, moderatorId }))
+        .send(renderAdminPage({ queue, queueError, dashboard, token, moderatorId }))
     );
   });
 }
@@ -246,8 +249,7 @@ function escapeHtml(value: string): string {
 interface AdminPageModel {
   readonly queue: readonly QueuedReport[];
   readonly queueError: string | null;
-  readonly openCount: number;
-  readonly reviewingCount: number;
+  readonly dashboard: DashboardView;
   readonly token: string;
   readonly moderatorId: string;
 }
@@ -258,11 +260,22 @@ function renderAdminPage(model: AdminPageModel): string {
       ? `<tr><td colspan="6" class="empty">Nothing waiting. </td></tr>`
       : model.queue.map(renderRow).join('\n');
 
+  const { live, safety, totals, trends } = model.dashboard;
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!--
+  Refreshes itself every 30 seconds.
+
+  A meta refresh rather than JavaScript, deliberately: this page runs under a
+  \`default-src 'none'\` CSP precisely so that report text written by a user has
+  nothing to execute with, and adding a script tag to save a page reload would
+  undo that for a dashboard nobody stares at continuously.
+-->
+<meta http-equiv="refresh" content="30">
 <title>Loverlink moderation</title>
 <style>
   :root { color-scheme: dark; }
@@ -283,14 +296,59 @@ function renderAdminPage(model: AdminPageModel): string {
   input, select, button { background:#201530; border:1px solid #2f2140; color:#f4eefb; border-radius:8px; padding:.4rem .5rem; font:inherit; }
   button { background:#c4527d; border:none; cursor:pointer; }
   .banner { background:rgba(224,107,127,.12); border:1px solid rgba(224,107,127,.35); color:#e06b7f; padding:.7rem .9rem; border-radius:10px; margin-bottom:1.25rem; }
+  .panel { background:#191024; border:1px solid #2f2140; border-radius:12px; padding:.9rem 1.1rem; margin-bottom:.9rem; }
+  .panel--attention { border-color:rgba(224,107,127,.5); }
+  .panel h2 { font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#6f5f83; margin:0 0 .5rem; }
+  .queue-title { font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#6f5f83; margin:1.5rem 0 .5rem; }
+  .faint-count b { color:#a996bd; }
+  /* A bar chart made of table cells: no script, no image, no external anything. */
+  .spark { display:flex; align-items:flex-end; gap:2px; height:34px; margin:.1rem 0 .35rem; }
+  .spark span { flex:1; background:#c4527d; border-radius:2px 2px 0 0; min-height:1px; }
+  .spark span.zero { background:#2f2140; }
+  .trend { margin-bottom:.6rem; }
+  .trend-label { color:#a996bd; font-size:.78rem; display:flex; justify-content:space-between; }
 </style>
 </head>
 <body>
   <h1>Loverlink moderation</h1>
-  <p class="counts">
-    <span class="count"><b>${model.openCount}</b> open</span>
-    <span class="count"><b>${model.reviewingCount}</b> in review</span>
-  </p>
+
+  <!--
+    LIVE first, cumulative second. These answer different questions and the
+    order is the answer to "is the product working right now?" — which is what
+    someone opening this at 3am is actually asking.
+  -->
+  <section class="panel" aria-label="Right now">
+    <h2>Right now</h2>
+    <p class="counts">
+      <span class="count"><b>${live.usersInRooms}</b> people in rooms</span>
+      <span class="count"><b>${live.activeRooms}</b> rooms with someone in them</span>
+      <span class="count faint-count"><b>${live.roomEntries}</b> seats filled</span>
+    </p>
+    <p class="meta">
+      A person in two rooms is two seats and one person. Generated
+      ${escapeHtml(model.dashboard.generatedAt)}.
+    </p>
+  </section>
+
+  <section class="panel ${safety.openReports > 0 ? 'panel--attention' : ''}" aria-label="Safety queue">
+    <h2>Waiting on a person</h2>
+    <p class="counts">
+      <span class="count"><b>${safety.openReports}</b> open</span>
+      <span class="count"><b>${safety.underReview}</b> in review</span>
+    </p>
+  </section>
+
+  <section class="panel" aria-label="Totals">
+    <h2>Since the beginning</h2>
+    <p class="counts">${renderTotals(totals)}</p>
+  </section>
+
+  <section class="panel" aria-label="Last fourteen days">
+    <h2>Last 14 days</h2>
+    ${renderTrends(trends)}
+  </section>
+
+  <h2 class="queue-title">The queue</h2>
 
   ${
     model.moderatorId.length === 0
@@ -313,6 +371,62 @@ ${rows}
   </table>
 </body>
 </html>`;
+}
+
+/**
+ * Cumulative counters, most interesting first.
+ *
+ * Sorted by value rather than alphabetically: a dashboard is read by glancing,
+ * and the biggest numbers are the ones that say what this deployment is being
+ * used for.
+ */
+function renderTotals(totals: Readonly<Record<string, number>>): string {
+  const entries = Object.entries(totals).sort(([, a], [, b]) => b - a);
+
+  if (entries.length === 0) {
+    return `<span class="meta">Nothing counted yet.</span>`;
+  }
+
+  return entries
+    .map(
+      ([name, value]) =>
+        `<span class="count"><b>${value}</b> ${escapeHtml(name.replace(/[._]/g, ' '))}</span>`,
+    )
+    .join('');
+}
+
+/**
+ * A sparkline per trended counter, drawn with divs.
+ *
+ * Scaled to each series' own maximum, which is the right choice here: these
+ * counters differ by orders of magnitude (messages vastly outnumber reports),
+ * and a shared scale would flatten every series but one into a line at zero.
+ * The consequence — that heights are NOT comparable between charts — is why
+ * each carries its own maximum in the label.
+ */
+function renderTrends(trends: Readonly<Record<string, Readonly<Record<string, number>>>>): string {
+  const charts = Object.entries(trends).map(([name, series]) => {
+    // Keys are YYYY-MM-DD, so lexical order is chronological order.
+    const days = Object.keys(series).sort();
+    const values = days.map((day) => series[day] ?? 0);
+    const max = Math.max(...values, 1);
+
+    const bars = values
+      .map((value, index) => {
+        const height = Math.round((value / max) * 100);
+        // A zero-height bar is invisible and reads as missing data rather than
+        // as a real zero, so every bar keeps a sliver.
+        return `<span class="${value === 0 ? 'zero' : ''}" style="height:${Math.max(height, 2)}%" title="${escapeHtml(days[index] ?? '')}: ${value}"></span>`;
+      })
+      .join('');
+
+    return `<div class="trend">
+      <div class="trend-label"><span>${escapeHtml(name.replace(/[._]/g, ' '))}</span><span>peak ${max}</span></div>
+      <div class="spark">${bars}</div>
+    </div>`;
+  });
+
+  return charts.length === 0 ? `<span class="meta">No history yet.</span>` : charts.join('\n');
 }
 
 function renderRow(entry: QueuedReport): string {

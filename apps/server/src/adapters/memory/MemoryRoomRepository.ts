@@ -28,7 +28,12 @@ export class MemoryRoomRepository implements RoomRepository {
     if (this.slugs.has(input.slug)) {
       throw new ConflictError('A room with that address already exists.');
     }
-    const room: Room = Object.freeze({ ...input });
+    const room: Room = Object.freeze({
+      ...input,
+      nextOccurrenceAt: input.nextOccurrenceAt ?? null,
+      scheduleTimeZone: input.scheduleTimeZone ?? null,
+      lastOpenedAt: null,
+    });
     this.rooms.set(room.id, room);
     this.slugs.set(room.slug, room.id);
     this.members.set(room.id, []);
@@ -154,5 +159,66 @@ export class MemoryRoomRepository implements RoomRepository {
     this.rooms.clear();
     this.slugs.clear();
     this.members.clear();
+  }
+
+  // -- scheduling ----------------------------------------------------------
+
+  async listDueSchedules(now: Date, limit: number): Promise<readonly Room[]> {
+    return [...this.rooms.values()]
+      .filter(
+        (room) =>
+          room.isScheduled &&
+          room.nextOccurrenceAt !== null &&
+          room.nextOccurrenceAt.getTime() <= now.getTime(),
+      )
+      .sort((a, b) => (a.nextOccurrenceAt?.getTime() ?? 0) - (b.nextOccurrenceAt?.getTime() ?? 0))
+      .slice(0, limit);
+  }
+
+  async claimOccurrence(input: {
+    roomId: RoomId;
+    now: Date;
+    nextOccurrenceAt: Date;
+    openedAt: Date;
+  }): Promise<boolean> {
+    // --- atomic section: no await between the read and the write ---
+    const existing = this.rooms.get(input.roomId);
+    if (existing === undefined) return false;
+
+    // Mirrors the Postgres WHERE clause exactly: due, and not already opened
+    // for this occurrence. A second caller finds the occurrence moved into the
+    // future and loses.
+    if (!existing.isScheduled) return false;
+    if (existing.nextOccurrenceAt === null) return false;
+    if (existing.nextOccurrenceAt.getTime() > input.now.getTime()) return false;
+    if (
+      existing.lastOpenedAt !== null &&
+      existing.lastOpenedAt.getTime() >= existing.nextOccurrenceAt.getTime()
+    ) {
+      return false;
+    }
+
+    this.rooms.set(
+      input.roomId,
+      Object.freeze({
+        ...existing,
+        nextOccurrenceAt: input.nextOccurrenceAt,
+        lastOpenedAt: input.openedAt,
+        status: 'live' as const,
+      }),
+    );
+    // --- end atomic section ---
+    return true;
+  }
+
+  async disableSchedule(roomId: RoomId): Promise<void> {
+    const existing = this.rooms.get(roomId);
+    if (existing === undefined) return;
+
+    this.rooms.set(
+      roomId,
+      // `scheduleCron` kept on purpose: the host's intent stays visible.
+      Object.freeze({ ...existing, isScheduled: false, nextOccurrenceAt: null }),
+    );
   }
 }

@@ -147,6 +147,37 @@ export class InviteToCall {
       callRoomId: roomId,
     });
 
+    /*
+     * The push.
+     *
+     * THIS is the case that justifies the whole notification stack: a call is
+     * useless if you only discover it when you next happen to open the app. It
+     * is also the only `urgent` message in the product — it vibrates, persists,
+     * and re-alerts, and everything else deliberately does not.
+     *
+     * Fire-and-forget: the use case has already done its job, and nobody's call
+     * should fail because a push service was having a bad minute.
+     */
+    void this.ports.pushSubscriptions
+      .listForUser(targetId)
+      .then(async (subscriptions) => {
+        if (subscriptions.length === 0) return;
+        const result = await this.ports.push.send(targetId, subscriptions, {
+          title: caller.displayName,
+          // WHO, and what kind. Never what was said — this is a lock screen.
+          body: 'is calling you',
+          url: '/connections',
+          // One tag for calls, so a second attempt replaces the first rather
+          // than stacking two notifications for one ringing phone.
+          tag: 'call',
+          urgent: true,
+        });
+        if (result.expired.length > 0) {
+          await this.ports.pushSubscriptions.removeMany(result.expired);
+        }
+      })
+      .catch(() => undefined);
+
     this.ports.metrics.increment('call.invited');
     this.ports.logger.info({ callerId: caller.id, targetId, roomId }, 'call ringing');
 

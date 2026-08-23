@@ -29,6 +29,9 @@ export interface CreateRoomInput {
   readonly hostUserId: UserId;
   readonly isScheduled: boolean;
   readonly scheduleCron: string | null;
+  /** Required when `isScheduled`; the DB CHECK refuses a schedule without one. */
+  readonly nextOccurrenceAt?: Date | null;
+  readonly scheduleTimeZone?: string | null;
   readonly maxSpeakers: number;
   readonly status: RoomStatus;
   readonly createdAt: Date;
@@ -98,4 +101,69 @@ export interface RoomRepository {
 
   /** Rooms a user hosts. Used by the profile screen and scheduled-room jobs. */
   listHostedBy(userId: UserId, limit: number): Promise<readonly Room[]>;
+
+  // -- scheduling (phase 6) ------------------------------------------------
+
+  /**
+   * Scheduled rooms whose next occurrence has arrived.
+   *
+   * Returns rooms that are DUE, not rooms that have been opened. Deciding what
+   * to do with them — and claiming them — is the caller's job, because the
+   * decision involves the domain's cron arithmetic and the claim has to be
+   * atomic.
+   */
+  listDueSchedules(now: Date, limit: number): Promise<readonly Room[]>;
+
+  /**
+   * Atomically claim one occurrence and book the next.
+   *
+   * WHY THIS IS ONE METHOD AND NOT read-then-write
+   * ----------------------------------------------
+   * Two servers running the scheduler — during a rolling deploy, say — will
+   * both see the same room as due within the same second. If claiming were a
+   * separate write, both would open it, and the room would be announced twice
+   * to everyone watching.
+   *
+   * WHAT THE CONDITION IS, AND WHY IT IS NOT TIMESTAMP EQUALITY
+   * ------------------------------------------------------------
+   * The obvious key is "claim it if `next_occurrence_at` is still the value I
+   * read". It is also wrong, and wrong in a way that hides itself: Postgres
+   * TIMESTAMPTZ keeps MICROSECONDS and a JavaScript Date keeps milliseconds, so
+   * any value that originated in SQL — `now()`, a backfill, a manual edit, a
+   * restore — comes back as `.949` against a stored `.949147` and the equality
+   * never matches. The sweep then reports the room as claimed by another
+   * server, which is a lie, and the room is stranded forever with nothing
+   * logged as an error.
+   *
+   * So the condition says what is actually meant: claim it if it is DUE and has
+   * not already been opened FOR THIS OCCURRENCE. That is precision-independent,
+   * and it is still a compare-and-set — the winner moves the occurrence
+   * forward and stamps `last_opened_at`, so the loser finds it neither due nor
+   * unopened.
+   *
+   * @returns true if THIS caller claimed it.
+   */
+  claimOccurrence(input: {
+    roomId: RoomId;
+    /** The sweep's notion of now. The room must be due against this. */
+    now: Date;
+    /** When it should open next. Always a real date; see `disableSchedule`. */
+    nextOccurrenceAt: Date;
+    openedAt: Date;
+  }): Promise<boolean>;
+
+  /**
+   * Stop a schedule that can never fire again.
+   *
+   * SEPARATE FROM `claimOccurrence` because it is a different intent, and
+   * folding it in (as a null occurrence) meant one method that sometimes opened
+   * a room and sometimes switched it off — with `status = 'live'` applied in
+   * both cases, so a broken room was advertised as running.
+   *
+   * The room is NOT deleted and `schedule_cron` is NOT cleared: the host's
+   * intent stays on the row so a human can see what was asked for and that it
+   * is no longer happening. Only `is_scheduled` and `next_occurrence_at` change,
+   * which is exactly what takes it out of the sweep. See migration 0003.
+   */
+  disableSchedule(roomId: RoomId): Promise<void>;
 }

@@ -47,6 +47,10 @@ import type { RelationshipRepository } from './RelationshipRepository.js';
 import type { ReportRepository } from './ReportRepository.js';
 import type { RoomRepository } from './RoomRepository.js';
 import type { SurpriseRepository } from './SurpriseRepository.js';
+import type { PushSubscriptionRepository } from './PushSubscriptionRepository.js';
+import type { PushSender } from './PushSender.js';
+import type { ObjectStore } from './ObjectStore.js';
+import type { JobQueue } from './JobQueue.js';
 import type { TokenService } from './TokenService.js';
 import type { UserRepository } from './UserRepository.js';
 
@@ -66,6 +70,15 @@ export interface Ports {
   readonly users: UserRepository;
   readonly rooms: RoomRepository;
   readonly surprises: SurpriseRepository;
+  readonly pushSubscriptions: PushSubscriptionRepository;
+  readonly push: PushSender;
+  /**
+   * Large files. No feature uses it yet — see the port for why it is defined
+   * before there is one.
+   */
+  readonly objects: ObjectStore;
+  /** Work that must not happen inside a request. Consumed by workers, not here. */
+  readonly jobs: JobQueue;
   readonly reports: ReportRepository;
   readonly relationships: RelationshipRepository;
   readonly messages: MessageRepository;

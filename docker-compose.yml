@@ -15,7 +15,28 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector rather than plain postgres, so LOCAL MATCHES SUPABASE.
+    #
+    # Production runs on Supabase, which ships pgvector. A local image without
+    # it means a migration that enables the extension passes in production and
+    # fails on every developer's machine — or, worse, is written to skip
+    # silently and the two schemas quietly diverge.
+    #
+    # Same major version as Supabase's default. The tag is pinned: `latest`
+    # would mean a developer's `docker compose pull` can change the database
+    # under a project that is not expecting it.
+    #
+    # NOTE FOR ANYONE UPGRADING AN EXISTING VOLUME: this image is Debian-based
+    # where the old `postgres:16-alpine` was musl, and the two sort text
+    # differently. Postgres notices and warns about a collation version
+    # mismatch. On a volume with existing data, run once:
+    #
+    #     REINDEX DATABASE loverlink;
+    #     ALTER DATABASE loverlink REFRESH COLLATION VERSION;
+    #
+    # Skipping it leaves indexes ordered by the old rules while queries use the
+    # new ones, which produces rows that exist but cannot be found.
+    image: pgvector/pgvector:pg16
     container_name: loverlink-postgres
     restart: unless-stopped
     environment:

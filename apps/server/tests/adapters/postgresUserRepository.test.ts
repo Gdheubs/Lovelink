@@ -5,6 +5,7 @@ import { MemoryUserRepository } from '../../src/adapters/memory/MemoryUserReposi
 import type { UserRepository } from '../../src/domain/ports/UserRepository.js';
 import { nullLogger } from '../../src/domain/ports/Logger.js';
 import { asUserId } from '../../src/domain/values/ids.js';
+import { asLocalDay } from '../../src/domain/values/streaks.js';
 import { TRUST_MAX, TRUST_MIN } from '../../src/domain/values/trust.js';
 import { DATABASE_URL, postgresAvailable, truncateAll } from './support.js';
 
@@ -245,6 +246,123 @@ describe.skipIf(!available)('UserRepository contract', () => {
           });
         }
         expect(await repo.listTrustEvents(created.id, 3)).toHaveLength(3);
+      });
+
+      // -- streaks (phase 6) ---------------------------------------------
+
+      /**
+       * The streak columns are the first place the two implementations could
+       * plausibly disagree about a DATE, and a disagreement there is invisible
+       * until someone's streak resets a day early.
+       */
+      describe('streaks', () => {
+        it('a new account starts with no streak and a freeze in hand', async () => {
+          const created = await create(uuid(20), 'streak-new@example.com');
+
+          expect(created.streak.current).toBe(0);
+          expect(created.streak.longest).toBe(0);
+          expect(created.streak.lastDay).toBeNull();
+          expect(created.streak.freezeAvailable).toBe(true);
+        });
+
+        it('defaults the timezone to UTC rather than leaving it unset', async () => {
+          const created = await create(uuid(21), 'streak-tz@example.com');
+          expect(created.timeZone).toBe('UTC');
+        });
+
+        it('round-trips a saved streak', async () => {
+          const created = await create(uuid(22), 'streak-save@example.com');
+
+          await repo.saveStreak(
+            created.id,
+            {
+              current: 3,
+              longest: 7,
+              lastDay: asLocalDay('2026-03-14'),
+              freezeAvailable: false,
+            },
+            new Date('2026-03-14T21:30:00.000Z'),
+          );
+
+          const reread = await repo.findById(created.id);
+          expect(reread?.streak.current).toBe(3);
+          expect(reread?.streak.longest).toBe(7);
+          expect(reread?.streak.freezeAvailable).toBe(false);
+        });
+
+        /**
+         * The failure this guards: node-postgres builds a JS Date for a DATE
+         * column in the PROCESS's local timezone. Formatting that with
+         * `toISOString()` shifts the day backwards on any server west of UTC,
+         * turning 2026-03-14 into 2026-03-13 — which either extends or kills a
+         * streak depending on which side of midnight the server sits.
+         */
+        it('PRESERVES THE LOCAL DAY EXACTLY, WITH NO TIMEZONE DRIFT', async () => {
+          const created = await create(uuid(23), 'streak-day@example.com');
+
+          await repo.saveStreak(
+            created.id,
+            {
+              current: 1,
+              longest: 1,
+              lastDay: asLocalDay('2026-03-14'),
+              freezeAvailable: true,
+            },
+            // Late evening UTC: the instant most likely to be re-read as the
+            // previous or next day by a careless conversion.
+            new Date('2026-03-14T23:45:00.000Z'),
+          );
+
+          const reread = await repo.findById(created.id);
+          expect(reread?.streak.lastDay).toBe('2026-03-14');
+        });
+
+        it('preserves a day at the start of the year', async () => {
+          const created = await create(uuid(24), 'streak-ny@example.com');
+
+          await repo.saveStreak(
+            created.id,
+            { current: 1, longest: 1, lastDay: asLocalDay('2026-01-01'), freezeAvailable: true },
+            new Date('2026-01-01T00:30:00.000Z'),
+          );
+
+          expect((await repo.findById(created.id))?.streak.lastDay).toBe('2026-01-01');
+        });
+
+        it('refuses to save a streak for a user that does not exist', async () => {
+          await expect(
+            repo.saveStreak(
+              asUserId(uuid(25)),
+              { current: 1, longest: 1, lastDay: asLocalDay('2026-03-14'), freezeAvailable: true },
+              new Date('2026-03-14T12:00:00.000Z'),
+            ),
+          ).rejects.toBeTruthy();
+        });
+
+        it('updates the timezone', async () => {
+          const created = await create(uuid(26), 'streak-settz@example.com');
+          await repo.updateTimeZone(created.id, 'Pacific/Auckland');
+
+          expect((await repo.findById(created.id))?.timeZone).toBe('Pacific/Auckland');
+        });
+
+        it('CHANGING THE TIMEZONE DOES NOT REWRITE THE RECORDED DAY', async () => {
+          // Someone flies to Auckland. Their past show-ups keep the days they
+          // were counted as — recomputing them would merge or split days and
+          // silently lengthen or kill a streak with nothing having happened.
+          const created = await create(uuid(27), 'streak-travel@example.com');
+
+          await repo.saveStreak(
+            created.id,
+            { current: 5, longest: 5, lastDay: asLocalDay('2026-03-14'), freezeAvailable: true },
+            new Date('2026-03-14T21:00:00.000Z'),
+          );
+          await repo.updateTimeZone(created.id, 'Pacific/Auckland');
+
+          const reread = await repo.findById(created.id);
+          expect(reread?.streak.lastDay).toBe('2026-03-14');
+          expect(reread?.streak.current).toBe(5);
+        });
       });
     });
   }

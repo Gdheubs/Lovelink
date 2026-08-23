@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/apiClient';
 import { useAuth } from '../../lib/AuthProvider';
+import { AppSettings } from './AppSettings';
 import { avatarFor, TIER_LABEL } from '../../lib/avatar';
 
 /**
@@ -239,6 +240,43 @@ export default function ProfilePage() {
           )}
         </section>
 
+        {/*
+          The streak, and what to do about it.
+
+          Shown from the SERVER's computed view, never the stored counter —
+          `current` goes stale the moment a day passes without a show-up, and
+          rendering it raw would tell someone they have a twelve-day streak a
+          week after it ended.
+        */}
+        <section className="card">
+          <h2 className="card__title">Showing up</h2>
+          {profile.streak.current === 0 ? (
+            <p className="faint">
+              {profile.streak.longest > 0
+                ? `Your longest run was ${profile.streak.longest} days. Drop into a room to start another.`
+                : 'Join a room and your streak starts today.'}
+            </p>
+          ) : (
+            <>
+              <p className="streak-count">
+                <strong>{profile.streak.current}</strong>{' '}
+                {profile.streak.current === 1 ? 'day' : 'days'} in a row
+              </p>
+              <p className="faint">
+                {profile.streak.showedUpToday
+                  ? 'Today already counts.'
+                  : profile.streak.atRisk
+                    ? 'You missed yesterday — your one skip is holding this up. Drop in today to keep it.'
+                    : 'Drop into a room today to keep it going.'}
+                {profile.streak.longest > profile.streak.current &&
+                  ` Longest: ${profile.streak.longest}.`}
+              </p>
+            </>
+          )}
+        </section>
+
+        <AppSettings />
+
         <section className="card">
           <h2 className="card__title">Session</h2>
           <button
@@ -253,9 +291,6 @@ export default function ProfilePage() {
           </button>
         </section>
 
-        <p className="faint center" style={{ marginTop: '1.5rem' }}>
-          Rooms arrive in the next build phase.
-        </p>
       </div>
     </main>
   );

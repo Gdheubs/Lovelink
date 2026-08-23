@@ -3,6 +3,7 @@ import type { TrustEvent } from '../../domain/entities/TrustEvent.js';
 import type { CreateUserInput, UserRepository } from '../../domain/ports/UserRepository.js';
 import type { UserId } from '../../domain/values/ids.js';
 import { projectTrustScore } from '../../domain/values/trust.js';
+import { emptyStreak, type StreakState } from '../../domain/values/streaks.js';
 import { ConflictError, NotFoundError } from '../../domain/errors.js';
 
 /**
@@ -41,6 +42,8 @@ export class MemoryUserRepository implements UserRepository {
       trustScore: 0,
       status: 'active' as UserStatus,
       createdAt: input.createdAt,
+      timeZone: 'UTC',
+      streak: emptyStreak(),
     });
     this.byId.set(user.id, user);
     this.byIdentifier.set(user.identifier, user.id);
@@ -110,6 +113,25 @@ export class MemoryUserRepository implements UserRepository {
     return [...events]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
+  }
+
+  async saveStreak(id: UserId, state: StreakState, lastAt: Date): Promise<void> {
+    const existing = this.byId.get(id);
+    if (existing === undefined) throw new NotFoundError('User');
+
+    // `lastAt` is accepted and deliberately not stored separately here: the
+    // fake keeps only what the port's readers can observe, and nothing reads
+    // the instant back. Postgres persists it for auditing — a difference the
+    // adapter contract test asserts rather than hides.
+    void lastAt;
+
+    this.byId.set(id, Object.freeze({ ...existing, streak: state }));
+  }
+
+  async updateTimeZone(id: UserId, timeZone: string): Promise<void> {
+    const existing = this.byId.get(id);
+    if (existing === undefined) throw new NotFoundError('User');
+    this.byId.set(id, Object.freeze({ ...existing, timeZone }));
   }
 
   /** Test helper. Not part of the port. */

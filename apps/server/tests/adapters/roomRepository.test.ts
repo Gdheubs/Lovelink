@@ -277,6 +277,199 @@ describe.skipIf(!available)('RoomRepository contract', () => {
           expect(await repo.haveSharedRoomSession(ALICE, BOB)).toBe(true);
         });
       });
+
+      // -- scheduling (phase 6) ------------------------------------------
+
+      describe('claiming a scheduled occurrence', () => {
+        const SCHEDULED = asRoomId('55555555-5555-4555-8555-555555555555');
+
+        const scheduleAt = (nextOccurrenceAt: Date) =>
+          repo.create({
+            id: SCHEDULED,
+            slug: 'nightly',
+            title: 'Nightly',
+            category: 'late_night',
+            hostUserId: HOST,
+            isScheduled: true,
+            scheduleCron: '0 22 * * *',
+            scheduleTimeZone: 'UTC',
+            nextOccurrenceAt,
+            maxSpeakers: 4,
+            status: 'scheduled',
+            createdAt: new Date('2026-03-01T00:00:00.000Z'),
+          });
+
+        const NOW = new Date('2026-03-14T22:00:30.000Z');
+
+        it('lists a room whose time has come', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+          const due = await repo.listDueSchedules(NOW, 10);
+          expect(due.map((room) => room.id)).toContain(SCHEDULED);
+        });
+
+        it('does not list one whose time has not', async () => {
+          await scheduleAt(new Date('2026-03-15T22:00:00.000Z'));
+          expect(await repo.listDueSchedules(NOW, 10)).toHaveLength(0);
+        });
+
+        it('claims it, moves the occurrence on, and marks it live', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          const claimed = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+
+          expect(claimed).toBe(true);
+
+          const after = await repo.findById(SCHEDULED);
+          expect(after?.status).toBe('live');
+          expect(after?.nextOccurrenceAt?.toISOString()).toBe('2026-03-15T22:00:00.000Z');
+          expect(after?.lastOpenedAt).not.toBeNull();
+        });
+
+        it('A SECOND CLAIM ON THE SAME OCCURRENCE LOSES', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          const first = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+          const second = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+
+          expect(first).toBe(true);
+          expect(second).toBe(false);
+        });
+
+        it('TWO CLAIMS RACING PRODUCE EXACTLY ONE WINNER', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          const results = await Promise.all([
+            repo.claimOccurrence({
+              roomId: SCHEDULED,
+              now: NOW,
+              nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+              openedAt: NOW,
+            }),
+            repo.claimOccurrence({
+              roomId: SCHEDULED,
+              now: NOW,
+              nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+              openedAt: NOW,
+            }),
+          ]);
+
+          expect(results.filter(Boolean)).toHaveLength(1);
+        });
+
+        it('refuses to claim one that is not due yet', async () => {
+          await scheduleAt(new Date('2026-03-15T22:00:00.000Z'));
+
+          const claimed = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-16T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+
+          expect(claimed).toBe(false);
+        });
+
+        it('claims the NEXT occurrence when its turn comes', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+
+          const tomorrow = new Date('2026-03-15T22:00:30.000Z');
+          const again = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: tomorrow,
+            nextOccurrenceAt: new Date('2026-03-16T22:00:00.000Z'),
+            openedAt: tomorrow,
+          });
+
+          expect(again).toBe(true);
+        });
+
+        it('disabling takes it out of the sweep for good', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          await repo.disableSchedule(SCHEDULED);
+
+          expect(await repo.listDueSchedules(new Date('2027-01-01T00:00:00.000Z'), 10)).toHaveLength(
+            0,
+          );
+        });
+
+        it('DISABLING KEEPS THE HOST’S INTENT ON THE ROW', async () => {
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+          await repo.disableSchedule(SCHEDULED);
+
+          // Someone looking at this row has to be able to see what was asked
+          // for and that it is no longer happening. Clearing the expression
+          // would leave an ordinary ad-hoc room and no explanation.
+          const after = await repo.findById(SCHEDULED);
+          expect(after).not.toBeNull();
+          expect(after?.isScheduled).toBe(false);
+          expect(after?.scheduleCron).toBe('0 22 * * *');
+          expect(after?.nextOccurrenceAt).toBeNull();
+        });
+
+        it('disabling a room that does not exist is not an error', async () => {
+          await expect(
+            repo.disableSchedule(asRoomId('99999999-9999-4999-8999-999999999999')),
+          ).resolves.toBeUndefined();
+        });
+
+        /**
+         * THE BUG THIS EXISTS TO PREVENT.
+         *
+         * Postgres TIMESTAMPTZ keeps microseconds; a JavaScript Date keeps
+         * milliseconds. A value written by SQL — `now()`, a backfill, a manual
+         * edit, a restore — round-trips through JS as `.949` against a stored
+         * `.949147`, so any compare-and-set keyed on timestamp EQUALITY silently
+         * never matches.
+         *
+         * The failure is invisible in the worst way: the sweep reports the room
+         * as "claimed by another server", which is a lie, and the room is
+         * stranded forever with nothing logged as an error.
+         */
+        it('CLAIMS A ROOM WHOSE OCCURRENCE HAS SUB-MILLISECOND PRECISION', async () => {
+          if (name !== 'postgres') return;
+
+          await scheduleAt(new Date('2026-03-14T22:00:00.000Z'));
+
+          // Write a timestamp only Postgres can represent.
+          await db.query(
+            `UPDATE rooms SET next_occurrence_at = TIMESTAMPTZ '2026-03-14 22:00:00.123456+00'
+              WHERE id = $1`,
+            [SCHEDULED],
+          );
+
+          const claimed = await repo.claimOccurrence({
+            roomId: SCHEDULED,
+            now: NOW,
+            nextOccurrenceAt: new Date('2026-03-15T22:00:00.000Z'),
+            openedAt: NOW,
+          });
+
+          expect(claimed).toBe(true);
+        });
+      });
     });
   }
 });

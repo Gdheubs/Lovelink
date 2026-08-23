@@ -166,7 +166,33 @@ async function status(client: Client): Promise<void> {
 async function main(): Promise<void> {
   const command = process.argv[2] ?? 'up';
   const config = loadConfig();
-  const client = new Client({ connectionString: config.DATABASE_URL });
+
+  /*
+   * MIGRATIONS USE THE DIRECT CONNECTION, NOT THE POOLER.
+   *
+   * Not a preference — a requirement, and this file is the concrete reason the
+   * distinction exists. The advisory lock below is SESSION state: it is held by
+   * one backend for the life of the connection, which is exactly what a
+   * transaction pooler refuses to guarantee. Run through the pooler, two
+   * concurrent deploys would both believe they hold the lock and both apply the
+   * same migration.
+   *
+   * A long single-session schema change is also the worst possible fit for
+   * pooling generally, and a migration that fails halfway is not worth saving a
+   * connection over.
+   *
+   * Falls back to DATABASE_URL so a local container — where the two are the
+   * same thing — needs no extra setting.
+   */
+  const connectionString =
+    config.DATABASE_DIRECT_URL.length > 0 ? config.DATABASE_DIRECT_URL : config.DATABASE_URL;
+
+  const client = new Client({
+    connectionString,
+    ...(config.DATABASE_SSL
+      ? { ssl: { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED } }
+      : {}),
+  });
 
   await client.connect();
   try {

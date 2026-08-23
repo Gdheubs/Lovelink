@@ -126,6 +126,26 @@ export class MemoryPresenceStore implements PresenceStore {
       .sort((a, b) => (a.handRaisedAtMs ?? 0) - (b.handRaisedAtMs ?? 0));
   }
 
+  async countLive(): Promise<{ entries: number; users: number; rooms: number }> {
+    const users = new Set<string>();
+    const rooms = new Set<string>();
+    let entries = 0;
+
+    for (const [roomId, map] of this.rooms) {
+      for (const [userId, entry] of map) {
+        // Expired-but-not-yet-reaped entries are excluded, matching Redis:
+        // the dashboard should agree with what people can see in a room, not
+        // with what the reaper has not got to yet.
+        if (!this.isLive(entry)) continue;
+        entries += 1;
+        users.add(userId);
+        rooms.add(roomId);
+      }
+    }
+
+    return { entries, users: users.size, rooms: rooms.size };
+  }
+
   async reapExpired(): Promise<readonly PresenceEntry[]> {
     const reaped: PresenceEntry[] = [];
     for (const [roomId, map] of this.rooms) {

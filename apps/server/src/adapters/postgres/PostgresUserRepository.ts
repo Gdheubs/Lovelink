@@ -4,6 +4,7 @@ import type { TrustReason } from '../../domain/values/trust.js';
 import type { CreateUserInput, UserRepository } from '../../domain/ports/UserRepository.js';
 import type { UserId } from '../../domain/values/ids.js';
 import { asUserId } from '../../domain/values/ids.js';
+import type { LocalDay, StreakState } from '../../domain/values/streaks.js';
 import { TRUST_MAX, TRUST_MIN } from '../../domain/values/trust.js';
 import { ConflictError, NotFoundError } from '../../domain/errors.js';
 import { isPgError, PG_ERROR, type Database } from './db.js';
@@ -36,11 +37,18 @@ interface UserRow {
   trust_score: number;
   status: string;
   created_at: Date;
+  time_zone: string;
+  streak_current: number;
+  streak_longest: number;
+  streak_last_day: Date | string | null;
+  streak_freeze_available: boolean;
 }
 
 const USER_COLUMNS = `
   id, identifier, identifier_kind, display_name,
-  avatar_seed, dob, trust_score, status, created_at
+  avatar_seed, dob, trust_score, status, created_at,
+  time_zone, streak_current, streak_longest,
+  streak_last_day, streak_freeze_available
 `;
 
 function toEntity(row: UserRow): User {
@@ -54,7 +62,36 @@ function toEntity(row: UserRow): User {
     trustScore: row.trust_score,
     status: row.status as UserStatus,
     createdAt: row.created_at,
+    timeZone: row.time_zone,
+    streak: {
+      current: row.streak_current,
+      longest: row.streak_longest,
+      lastDay: toLocalDay(row.streak_last_day),
+      freezeAvailable: row.streak_freeze_available,
+    },
   };
+}
+
+/**
+ * A DATE column as the domain's `YYYY-MM-DD`.
+ *
+ * `node-postgres` hands back a JS `Date` for DATE columns, constructed in the
+ * PROCESS's local timezone. Calling `toISOString()` on it would shift the day
+ * backwards for any server running west of UTC — turning 2026-03-14 into
+ * 2026-03-13 and quietly extending or breaking streaks depending on which side
+ * of midnight the server happens to sit.
+ *
+ * So the calendar fields are read directly, which is the only interpretation
+ * that survives the server being moved.
+ */
+function toLocalDay(value: Date | string | null): LocalDay | null {
+  if (value === null) return null;
+  if (typeof value === 'string') return value.slice(0, 10) as LocalDay;
+
+  const year = String(value.getFullYear()).padStart(4, '0');
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}` as LocalDay;
 }
 
 interface TrustEventRow {
@@ -219,5 +256,35 @@ export class PostgresUserRepository implements UserRepository {
       [userId, limit],
     );
     return rows.map(toTrustEvent);
+  }
+
+  async saveStreak(id: UserId, state: StreakState, lastAt: Date): Promise<void> {
+    const updated = await this.db.queryOne<{ id: string }>(
+      `UPDATE users
+          SET streak_current          = $2,
+              streak_longest          = $3,
+              streak_last_day         = $4,
+              streak_last_at          = $5,
+              streak_freeze_available = $6
+        WHERE id = $1
+        RETURNING id`,
+      [
+        id,
+        state.current,
+        state.longest,
+        state.lastDay,
+        lastAt,
+        state.freezeAvailable,
+      ],
+    );
+    if (updated === null) throw new NotFoundError('User');
+  }
+
+  async updateTimeZone(id: UserId, timeZone: string): Promise<void> {
+    const updated = await this.db.queryOne<{ id: string }>(
+      `UPDATE users SET time_zone = $2 WHERE id = $1 RETURNING id`,
+      [id, timeZone],
+    );
+    if (updated === null) throw new NotFoundError('User');
   }
 }

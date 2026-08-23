@@ -3,6 +3,7 @@ import { createHttpServer } from './adapters/http/server.js';
 import { createLogger } from './adapters/observability/PinoLogger.js';
 import { createSocketServer } from './adapters/socketio/server.js';
 import { startPresenceReaper } from './adapters/socketio/presenceReaper.js';
+import { startRoomScheduler, type RoomScheduler } from './adapters/scheduler/roomScheduler.js';
 import { startModerationSubscriber } from './adapters/socketio/moderationSubscriber.js';
 import { loadConfig } from './config.js';
 import { createContainer } from './container.js';
@@ -74,9 +75,15 @@ async function main(): Promise<void> {
   let closeRealtime: (() => Promise<void>) | null = null;
   let stopReaper: (() => void) | null = null;
   let stopModerationSubscriber: (() => Promise<void>) | null = null;
+  let roomScheduler: RoomScheduler | null = null;
 
   if (config.REALTIME_IN_PROCESS) {
-    const realtime = createSocketServer(app.server, { config, ports, useCases });
+    const realtime = createSocketServer(app.server, {
+      config,
+      ports,
+      useCases,
+      adapterClients: container.socketAdapterClients,
+    });
 
     // The ports bundle is built before the socket server exists, so its
     // `realtime` slot is filled here. This is the one late binding in the graph
@@ -96,6 +103,17 @@ async function main(): Promise<void> {
     // the moderator's request and the abusive user's socket are on different
     // machines.
     stopModerationSubscriber = await startModerationSubscriber({ ports });
+
+    // Recurring rooms.
+    //
+    // Started alongside realtime rather than unconditionally, because a
+    // separate realtime process would otherwise run a SECOND sweep — harmless
+    // (the claim is a compare-and-set) but pointless load, and two processes
+    // logging "opened" for one room makes an incident harder to read.
+    roomScheduler = startRoomScheduler({
+      openScheduledRooms: useCases.openScheduledRooms,
+      logger,
+    });
 
     closeRealtime = realtime.close;
     logger.info({ mode: 'in-process' }, 'realtime server attached');
@@ -131,6 +149,7 @@ async function main(): Promise<void> {
 
     try {
       stopReaper?.();
+      if (roomScheduler !== null) await roomScheduler.stop();
       if (stopModerationSubscriber !== null) await stopModerationSubscriber();
       if (closeRealtime !== null) await closeRealtime();
       await app.close();

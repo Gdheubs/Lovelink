@@ -138,11 +138,22 @@ mediasoup, or Redis for Valkey, must require changes **only** in
 | room chat                                                              | Redis    | Ephemeral **by product design** — a third place is not a forum. Bounded ring buffer, only to fill the reconnect snapshot. |
 | direct messages                                                        | Postgres | A conversation you scroll back through is the point.                                                                      |
 | rate-limit counters                                                    | Redis    | They must expire, and are worthless once they do.                                                                         |
+| push subscriptions                                                     | Postgres | One row per DEVICE, keyed on the endpoint so a shared machine moves to its new owner rather than notifying both.           |
+| large media (planned)                                                  | R2       | Presigned uploads — the bytes never enter the API process. No feature uses it yet.                                         |
 
 ### Database schema
 
-See `apps/server/migrations/0001_initial_schema.sql`. Every table and column
-carries a `COMMENT`. Notable constraints, each defending an invariant stated in
+See `apps/server/migrations/`, applied in filename order. Every table and column
+carries a `COMMENT`.
+
+| # | What it adds |
+| - | ------------ |
+| 0001 | The initial schema |
+| 0002 | Streaks, user timezone, scheduler bookkeeping |
+| 0003 | Lets a disabled schedule keep its cron, so a host can see what stopped |
+| 0004 | Push subscriptions |
+| 0005 | RLS on every personal table (no policies — a backstop, see ADR 0008) and pgvector |
+ Notable constraints, each defending an invariant stated in
 the domain:
 
 - `room_members_one_open_session` — at most one open membership row per
@@ -313,3 +324,4 @@ See [`docs/adr/`](./adr/). One short record per significant choice.
 | [0005](./adr/0005-realtime-in-process-first.md) | Realtime runs in-process first |
 | [0006](./adr/0006-ephemeral-room-chat.md) | Room chat is ephemeral; DMs persist |
 | [0007](./adr/0007-call-signalling-in-the-relationship.md) | Call signalling lives in the relationship row |
+| [0008](./adr/0008-managed-platform-topology.md) | Supabase + Vercel + Cloudflare + R2; the process split |

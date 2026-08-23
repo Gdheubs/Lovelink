@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { HttpServerDeps } from '../server.js';
 import { actorOf, requireAuth } from '../authGuard.js';
+import { clientIp } from '../clientIp.js';
 import {
   SURPRISE_MAX_TASKS,
   SURPRISE_MESSAGE_MAX,
@@ -98,7 +99,7 @@ export async function registerSurpriseRoutes(
     const revealed = await useCases.redeemSurprise.execute(actor.user, {
       code: body.code,
       mood: body.mood,
-      ip: clientIp(request),
+      ip: clientIp(request, deps.config.TRUST_PROXY),
     });
 
     return reply.status(200).send(revealed);
@@ -144,12 +145,4 @@ export async function registerSurpriseRoutes(
   });
 }
 
-/**
- * The caller's IP, for the redemption rate limit only.
- *
- * That limit is not incidental — it is the control that makes a short,
- * speakable code safe at all. See RedeemSurprise.
- */
-function clientIp(request: FastifyRequest): string {
-  return request.ip;
-}
+

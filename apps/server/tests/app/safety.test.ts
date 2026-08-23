@@ -510,4 +510,65 @@ describe('safety', () => {
       expect(await ports.relationships.listBlockedIds(alice.id)).toContain(mallory.id);
     });
   });
+
+  // -------------------------------------------------------------------------
+  describe('the admin dashboard', () => {
+    it('reports nobody in rooms when nobody is', async () => {
+      for (const user of [host, alice, mallory]) {
+        await useCases.leaveRoom.execute({ userId: user.id, roomId, reason: 'left' });
+      }
+
+      const view = await useCases.getDashboard.execute();
+      expect(view.live.usersInRooms).toBe(0);
+      expect(view.live.activeRooms).toBe(0);
+    });
+
+    it('counts the people actually in rooms', async () => {
+      const view = await useCases.getDashboard.execute();
+
+      // host, alice and mallory joined in beforeEach.
+      expect(view.live.usersInRooms).toBe(3);
+      expect(view.live.activeRooms).toBe(1);
+    });
+
+    it('DISTINGUISHES PEOPLE FROM SEATS', async () => {
+      // One person in two rooms is two seats and one person. A dashboard that
+      // conflates them overstates the audience — badly, on a quiet night when
+      // a handful of people are each in several rooms.
+      const second = await useCases.createRoom.execute(host, {
+        title: 'Another Room',
+        category: 'study',
+      });
+      await useCases.joinRoom.execute(alice, second.id);
+
+      const view = await useCases.getDashboard.execute();
+      expect(view.live.usersInRooms).toBe(3);
+      expect(view.live.roomEntries).toBe(4);
+      expect(view.live.activeRooms).toBe(2);
+    });
+
+    it('surfaces the safety backlog', async () => {
+      await useCases.submitReport.execute(alice, {
+        targetId: mallory.id,
+        roomId,
+        category: 'harassment',
+      });
+
+      const view = await useCases.getDashboard.execute();
+      expect(view.safety.openReports).toBe(1);
+    });
+
+    it('carries a trend series for the counters worth watching', async () => {
+      const view = await useCases.getDashboard.execute();
+
+      expect(Object.keys(view.trends)).toContain('room.joined');
+      // Fourteen days, so the shape of a week is visible either side.
+      expect(Object.keys(view.trends['room.joined'] ?? {})).toHaveLength(14);
+    });
+
+    it('stamps when it was generated, because the page is cached and refreshed', async () => {
+      const view = await useCases.getDashboard.execute();
+      expect(() => new Date(view.generatedAt).toISOString()).not.toThrow();
+    });
+  });
 });

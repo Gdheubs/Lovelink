@@ -94,10 +94,73 @@ export interface DatabaseOptions {
   readonly connectionString: string;
   readonly poolMax: number;
   readonly logger: Logger;
+  /**
+   * Require TLS, and whether to verify the server's certificate.
+   *
+   * Managed Postgres — Supabase, Neon, RDS — is reached over the public
+   * internet, so TLS is not optional there. It is optional against a local
+   * container, which has no certificate at all.
+   */
+  readonly ssl?: { readonly rejectUnauthorized: boolean } | false;
+}
+
+/**
+ * Whether this connection string points at a TRANSACTION-mode connection
+ * pooler, which changes what the driver is allowed to do.
+ *
+ * WHY THIS MATTERS, AND WHY IT IS DETECTED RATHER THAN CONFIGURED
+ * --------------------------------------------------------------
+ * Supabase offers three ways in, and they are not interchangeable:
+ *
+ *   - :5432 direct        — a real session. Everything works.
+ *   - :5432 via Supavisor — session mode. Everything works.
+ *   - :6543 via Supavisor — TRANSACTION mode. A connection is handed to
+ *                           whichever query needs it and taken back at COMMIT,
+ *                           so no session state survives between statements.
+ *
+ * Transaction mode is what you want for a high-connection deployment, and it
+ * silently breaks anything that assumes a session survives between statements:
+ *
+ *   - LISTEN / NOTIFY          (we use Redis pub/sub instead — see EventBus)
+ *   - session-level SET        (we set nothing)
+ *   - advisory locks held across statements
+ *   - temporary tables
+ *   - NAMED prepared statements
+ *
+ * THIS DRIVER IS SAFE ON ALL FIVE, and the last one is worth being precise
+ * about because it is where the folklore is wrong: `node-postgres` only creates
+ * a named prepared statement when a query is given an explicit `name`, which
+ * nothing here does. The famous "prepared statement s1 already exists" error
+ * belongs to drivers and ORMs that promote statements automatically. We are not
+ * one, so no workaround is needed — but a future change that adds a `name`, a
+ * `LISTEN`, or a session-level `SET` would break in production only, under
+ * load, on one connection out of many.
+ *
+ * Hence this function and the boot log: the constraint is invisible in the
+ * code, so it is stated where someone will see it.
+ *
+ * `transaction()` below is fine either way — a pooler holds one backend for the
+ * duration of a BEGIN/COMMIT, which is exactly what it is for.
+ *
+ * Detected from the URL rather than configured, because the port number IS the
+ * mode and a separate flag is one more thing to get wrong.
+ */
+export function usesTransactionPooler(connectionString: string): boolean {
+  try {
+    const url = new URL(connectionString);
+    // Supavisor's transaction port, and pgBouncer's conventional one.
+    if (url.port === '6543') return true;
+    // An explicit marker some providers document.
+    return url.searchParams.get('pgbouncer') === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export function createDatabase(options: DatabaseOptions): Database {
   const log = options.logger.child({ component: 'postgres' });
+
+  const pooled = usesTransactionPooler(options.connectionString);
 
   const pool = new Pool({
     connectionString: options.connectionString,
@@ -108,7 +171,15 @@ export function createDatabase(options: DatabaseOptions): Database {
     // Fail fast rather than hanging a request forever when the pool is
     // exhausted or the database is unreachable.
     connectionTimeoutMillis: 5_000,
+    ...(options.ssl === undefined ? {} : { ssl: options.ssl }),
   });
+
+  if (pooled) {
+    log.info(
+      { mode: 'transaction-pooler' },
+      'connected through a transaction pooler: no session state survives between statements',
+    );
+  }
 
   /**
    * An idle client erroring (a network blip, a server restart) emits on the

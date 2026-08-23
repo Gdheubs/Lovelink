@@ -25,6 +25,18 @@ export class MemoryClock implements Clock {
   }
 
   /** Move time forward. Negative values are rejected: time does not go back. */
+  /**
+   * Jump to a specific instant.
+   *
+   * A test helper, not part of the Clock port. `advanceMs` is right for
+   * "and then a minute passed"; this is for tests whose subject IS a
+   * particular date — a Saturday, a daylight-saving boundary, the far side of
+   * an outage — where arriving there by addition would obscure the point.
+   */
+  setNow(instant: Date): void {
+    this.current = instant.getTime();
+  }
+
   advanceMs(ms: number): void {
     if (ms < 0) throw new Error('MemoryClock cannot move backwards.');
     this.current += ms;

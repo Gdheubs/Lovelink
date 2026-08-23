@@ -32,6 +32,18 @@ export interface Room {
   readonly maxSpeakers: number;
   readonly status: RoomStatus;
   readonly createdAt: Date;
+  /**
+   * When this scheduled room should next open, in UTC. Null for ad-hoc rooms.
+   *
+   * DURABLE ON PURPOSE. A recurring room has to survive a restart, and a timer
+   * living in one process's memory does not — a deploy at 21:55 would silently
+   * cancel a 22:00 room and nobody would report the absence.
+   */
+  readonly nextOccurrenceAt: Date | null;
+  /** When the scheduler last opened it. The compare-and-set key for claiming. */
+  readonly lastOpenedAt: Date | null;
+  /** IANA zone the schedule is expressed in. "10pm" means 10pm where the host is. */
+  readonly scheduleTimeZone: string | null;
 }
 
 export const ROOM_TITLE_MIN = 3;

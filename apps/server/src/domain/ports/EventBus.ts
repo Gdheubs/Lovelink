@@ -26,7 +26,7 @@ import type { RoomId, UserId } from '../values/ids.js';
  */
 
 /** The channel catalogue. One channel per concern, not one per event type. */
-export type BusChannel = 'moderation' | 'presence' | 'surprise' | 'relationship';
+export type BusChannel = 'moderation' | 'presence' | 'surprise' | 'relationship' | 'rooms';
 
 /**
  * Enforcement events. A subscriber that misses one leaves a banned user
@@ -67,7 +67,25 @@ export interface PresenceReapedEvent {
   readonly roomId: RoomId;
 }
 
+/**
+ * A scheduled room reached its time and was opened by the sweep.
+ *
+ * Published so any process can react — a future push-notification worker in
+ * particular. It carries what a notification needs (the title, the slug to
+ * link to) rather than only an id, because the subscriber may be in a
+ * different process with no database handle.
+ */
+export interface RoomOpenedEvent {
+  readonly type: 'room.opened';
+  readonly roomId: RoomId;
+  readonly slug: string;
+  readonly title: string;
+  /** False would mean a host opened it by hand; only the sweep publishes today. */
+  readonly scheduled: boolean;
+}
+
 export type BusEvent =
+  | RoomOpenedEvent
   | UserBannedEvent
   | UserKickedEvent
   | SurpriseReceivedEvent

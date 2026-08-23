@@ -2,6 +2,7 @@ import type { User } from '../../domain/entities/User.js';
 import type { Ports } from '../../domain/ports/index.js';
 import type { RoomStateView } from '../../domain/ports/RealtimeTransport.js';
 import type { RoomId } from '../../domain/values/ids.js';
+import { recordShowUp } from '../../domain/values/streaks.js';
 import { isJoinable } from '../../domain/entities/Room.js';
 import {
   initialRole,
@@ -130,6 +131,15 @@ export class JoinRoom {
       this.ports.metrics.increment('room.joined');
     }
 
+    // 4b. Today counted.
+    //
+    //     Deliberately fire-and-forget. A streak is a nicety, and being unable
+    //     to walk into a room because a counter could not be written would be
+    //     an absurd trade. The domain call is idempotent within a day, so the
+    //     common case (rejoining for the fourth time this evening) writes
+    //     nothing at all.
+    void this.recordShowUp(user);
+
     // 5. A media credential, so they can HEAR the room.
     //
     //    `canPublish` comes from the DOMAIN, never from anything the client
@@ -150,6 +160,34 @@ export class JoinRoom {
     );
 
     return { state, isNewArrival };
+  }
+
+  /**
+   * Count today, swallowing any failure.
+   *
+   * Inlined rather than injected as a use case to avoid a construction cycle in
+   * the registry, and kept tiny for the same reason the call site is `void`:
+   * nothing here is allowed to affect whether the join succeeded.
+   */
+  private async recordShowUp(user: User): Promise<void> {
+    try {
+      const now = this.ports.clock.now();
+      const next = recordShowUp(user.streak, now, user.timeZone);
+
+      // Reference equality: the domain returns the SAME object when the day was
+      // already counted, so this is the "no write needed" signal.
+      if (next === user.streak) return;
+
+      await this.ports.users.saveStreak(user.id, next, now);
+      if (next.current > user.streak.current) {
+        this.ports.metrics.increment('streak.extended');
+      }
+    } catch (error) {
+      this.ports.logger.warn(
+        { userId: user.id, err: String(error) },
+        'could not record the show-up; the join is unaffected',
+      );
+    }
   }
 
   /**

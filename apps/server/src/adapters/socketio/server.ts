@@ -1,5 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import type { Redis } from 'ioredis';
 import type { Config } from '../../config.js';
 import type { Ports } from '../../domain/ports/index.js';
 import type { UserId } from '../../domain/values/ids.js';
@@ -53,6 +55,13 @@ export interface SocketServerDeps {
   readonly config: Config;
   readonly ports: Ports;
   readonly useCases: UseCases;
+  /**
+   * A Redis pub/sub pair for cross-instance fan-out.
+   *
+   * Omit it and this server serves ONE instance correctly and more than one
+   * incorrectly — see where it is used below.
+   */
+  readonly adapterClients?: { readonly pub: Redis; readonly sub: Redis } | null;
 }
 
 /** What we attach to an authenticated socket. */
@@ -87,6 +96,34 @@ export function createSocketServer(httpServer: HttpServer, deps: SocketServerDep
     // Bodies here are chat messages. Same reasoning as the HTTP body limit.
     maxHttpBufferSize: SOCKET_MAX_PAYLOAD_BYTES,
   });
+
+  /**
+   * Cross-instance fan-out.
+   *
+   * WITHOUT THIS, MORE THAN ONE API INSTANCE IS BROKEN — and broken in the way
+   * that is hardest to notice. Each process only knows about the sockets it
+   * personally holds, so `emitToRoom` reaches the people who happened to
+   * connect to that instance and silently misses everyone else. A room looks
+   * half-empty to half its members; a call rings for nobody; a ban severs one
+   * socket out of three.
+   *
+   * It works perfectly on one instance, which is why this is the kind of thing
+   * that ships and is discovered by scaling up on a busy night.
+   *
+   * The adapter makes every instance publish its emissions to Redis and
+   * subscribe to everyone else's, so the room is the union of all of them.
+   *
+   * Null in memory mode: one process, nothing to coordinate with.
+   */
+  if (deps.adapterClients !== null && deps.adapterClients !== undefined) {
+    io.adapter(createAdapter(deps.adapterClients.pub, deps.adapterClients.sub));
+    ports.logger.info({ component: 'socketio' }, 'redis adapter attached: multi-instance fan-out is live');
+  } else {
+    ports.logger.warn(
+      { component: 'socketio' },
+      'no redis adapter: realtime works for ONE instance only',
+    );
+  }
 
   const transport = new SocketIoTransport(io, ports.logger);
 

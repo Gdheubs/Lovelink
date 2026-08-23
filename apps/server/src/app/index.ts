@@ -6,11 +6,13 @@ import { RequestLoginCode } from './auth/RequestLoginCode.js';
 import { VerifyLoginCode } from './auth/VerifyLoginCode.js';
 import { GetMyProfile } from './profile/GetMyProfile.js';
 import { UpdateMyProfile } from './profile/UpdateMyProfile.js';
+import { GetStreak, RecordShowUp, SetTimeZone } from './profile/RecordShowUp.js';
 import { CreateRoom } from './rooms/CreateRoom.js';
 import { Heartbeat } from './rooms/Heartbeat.js';
 import { JoinRoom } from './rooms/JoinRoom.js';
 import { LeaveRoom } from './rooms/LeaveRoom.js';
 import { ListRooms } from './rooms/ListRooms.js';
+import { OpenScheduledRooms } from './rooms/OpenScheduledRooms.js';
 import { SendChatMessage, SendTypingIndicator } from './chat/SendChatMessage.js';
 import { SendReaction } from './chat/SendReaction.js';
 import { RaiseHand } from './speaking/RaiseHand.js';
@@ -22,6 +24,12 @@ import { BanUser, LiftBan } from './safety/BanUser.js';
 import { ClaimReport, ListReportQueue, ResolveReport } from './safety/ReviewReports.js';
 import { BlockUser, UnblockUser } from './safety/BlockUser.js';
 import { KickUser } from './safety/KickUser.js';
+import { GetDashboard } from './admin/GetDashboard.js';
+import {
+  RegisterPushSubscription,
+  RemovePushSubscription,
+  SendPush,
+} from './push/ManagePushSubscriptions.js';
 import { CreateSurprise } from './surprises/CreateSurprise.js';
 import { RedeemSurprise, ToggleSurpriseTask } from './surprises/RedeemSurprise.js';
 import { ListMySurprises } from './surprises/ListMySurprises.js';
@@ -39,11 +47,13 @@ export * from './auth/RequestLoginCode.js';
 export * from './auth/VerifyLoginCode.js';
 export * from './profile/GetMyProfile.js';
 export * from './profile/UpdateMyProfile.js';
+export * from './profile/RecordShowUp.js';
 export * from './rooms/CreateRoom.js';
 export * from './rooms/Heartbeat.js';
 export * from './rooms/JoinRoom.js';
 export * from './rooms/LeaveRoom.js';
 export * from './rooms/ListRooms.js';
+export * from './rooms/OpenScheduledRooms.js';
 export * from './rooms/roomStateView.js';
 export * from './chat/SendChatMessage.js';
 export * from './chat/SendReaction.js';
@@ -56,6 +66,8 @@ export * from './safety/BanUser.js';
 export * from './safety/ReviewReports.js';
 export * from './safety/BlockUser.js';
 export * from './safety/KickUser.js';
+export * from './admin/GetDashboard.js';
+export * from './push/ManagePushSubscriptions.js';
 export * from './surprises/CreateSurprise.js';
 export * from './surprises/RedeemSurprise.js';
 export * from './surprises/ListMySurprises.js';
@@ -99,6 +111,9 @@ export interface UseCases {
   // -- profile -------------------------------------------------------------
   readonly getMyProfile: GetMyProfile;
   readonly updateMyProfile: UpdateMyProfile;
+  readonly recordShowUp: RecordShowUp;
+  readonly getStreak: GetStreak;
+  readonly setTimeZone: SetTimeZone;
 
   // -- rooms and presence --------------------------------------------------
   readonly createRoom: CreateRoom;
@@ -106,6 +121,7 @@ export interface UseCases {
   readonly joinRoom: JoinRoom;
   readonly leaveRoom: LeaveRoom;
   readonly heartbeat: Heartbeat;
+  readonly openScheduledRooms: OpenScheduledRooms;
 
   // -- chat ----------------------------------------------------------------
   readonly sendChatMessage: SendChatMessage;
@@ -129,6 +145,12 @@ export interface UseCases {
   readonly blockUser: BlockUser;
   readonly unblockUser: UnblockUser;
   readonly kickUser: KickUser;
+  readonly getDashboard: GetDashboard;
+
+  // -- push -----------------------------------------------------------------
+  readonly registerPushSubscription: RegisterPushSubscription;
+  readonly removePushSubscription: RemovePushSubscription;
+  readonly sendPush: SendPush;
 
   // -- surprises (rung 0 of the ladder: no relationship required) -----------
   readonly createSurprise: CreateSurprise;
@@ -192,12 +214,16 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
 
     getMyProfile: new GetMyProfile(ports),
     updateMyProfile: new UpdateMyProfile(ports),
+    recordShowUp: new RecordShowUp(ports),
+    getStreak: new GetStreak(ports),
+    setTimeZone: new SetTimeZone(ports),
 
     createRoom: new CreateRoom(ports),
     listRooms: new ListRooms(ports),
     joinRoom: new JoinRoom(ports),
     leaveRoom,
     heartbeat: new Heartbeat(ports),
+    openScheduledRooms: new OpenScheduledRooms(ports),
 
     sendChatMessage: new SendChatMessage(ports),
     sendTypingIndicator: new SendTypingIndicator(ports),
@@ -218,6 +244,11 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     blockUser: new BlockUser(ports),
     unblockUser: new UnblockUser(ports),
     kickUser: new KickUser(ports, leaveRoom),
+    getDashboard: new GetDashboard(ports),
+
+    registerPushSubscription: new RegisterPushSubscription(ports),
+    removePushSubscription: new RemovePushSubscription(ports),
+    sendPush: new SendPush(ports),
 
     createSurprise: new CreateSurprise(ports),
     redeemSurprise: new RedeemSurprise(ports),

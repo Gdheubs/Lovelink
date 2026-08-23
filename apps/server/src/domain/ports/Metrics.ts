@@ -28,6 +28,8 @@ export type CounterName =
   | 'reaction.sent'
   | 'hand.raised'
   | 'speaker.promoted'
+  | 'streak.extended'
+  | 'room.scheduled.opened'
   | 'surprise.created'
   | 'surprise.redeemed'
   | 'dm.requested'

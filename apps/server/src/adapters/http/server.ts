@@ -13,6 +13,7 @@ import { registerAdminRoutes } from './routes/admin.js';
 import { registerSafetyRoutes } from './routes/safety.js';
 import { registerSurpriseRoutes } from './routes/surprises.js';
 import { registerConnectionRoutes } from './routes/connections.js';
+import { registerPushRoutes } from './routes/push.js';
 import formbody from '@fastify/formbody';
 
 /**
@@ -51,9 +52,17 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
     // Correlation id on every request, echoed in 500 responses so a user can
     // quote it and we can find the exact line.
     genReqId: () => ports.ids.uuid(),
-    // Correct behind Cloudflare: resolves the real client IP from
-    // x-forwarded-for, which the rate limiters key on.
-    trustProxy: true,
+    /*
+     * Whether to believe the proxy about who the client is.
+     *
+     * The rate limiters key on this, so getting it wrong in either direction
+     * has a cost: trust a header nobody sets and every request looks like it
+     * comes from the load balancer, so one person's flood limits everybody;
+     * trust one an attacker can set and per-IP limits stop existing.
+     *
+     * Config decides, and it defaults to NOT trusting — see TRUST_PROXY.
+     */
+    trustProxy: config.TRUST_PROXY,
     // Bodies are small (a chat message, a report note). A low cap is a cheap
     // defence against memory-exhaustion attempts.
     bodyLimit: 64 * 1024,
@@ -124,6 +133,7 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
   await registerSafetyRoutes(app, deps);
   await registerSurpriseRoutes(app, deps);
   await registerConnectionRoutes(app, deps);
+  await registerPushRoutes(app, deps);
   await registerAdminRoutes(app, deps);
 
   return app;

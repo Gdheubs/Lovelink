@@ -74,7 +74,15 @@ async function main(): Promise<void> {
     res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Realtime process only.' } }));
   });
 
-  const realtime = createSocketServer(httpServer, { config, ports, useCases });
+  const realtime = createSocketServer(httpServer, {
+    config,
+    ports,
+    useCases,
+    // The standalone realtime process is BY DEFINITION not the only process:
+    // the API is emitting to these same rooms from elsewhere. Without the
+    // adapter, nothing the API emits would ever reach a socket held here.
+    adapterClients: container.socketAdapterClients,
+  });
   container.attachRealtime(realtime.transport);
 
   const stopModerationSubscriber = await startModerationSubscriber({ ports });

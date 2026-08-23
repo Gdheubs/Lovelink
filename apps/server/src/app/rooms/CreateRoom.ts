@@ -10,6 +10,7 @@ import {
 } from '../../domain/entities/Room.js';
 import { canAct, DENIAL_MESSAGES } from '../../domain/rules/trustLadder.js';
 import { asRoomId } from '../../domain/values/ids.js';
+import { nextOccurrence, parseSchedule, SCHEDULE_HELP } from '../../domain/values/schedule.js';
 import { AuthorizationError, ConflictError, ValidationError } from '../../domain/errors.js';
 
 /**
@@ -40,6 +41,8 @@ export interface CreateRoomInput {
   readonly maxSpeakers?: number;
   /** Cron expression for a recurring room. Phase 6 uses this; null for ad-hoc. */
   readonly scheduleCron?: string | null;
+  /** IANA zone the schedule means. Defaults to the host's own. */
+  readonly scheduleTimeZone?: string | null;
 }
 
 const MAX_SLUG_ATTEMPTS = 5;
@@ -68,6 +71,36 @@ export class CreateRoom {
     assertValidMaxSpeakers(maxSpeakers);
 
     const scheduleCron = input.scheduleCron ?? null;
+
+    /*
+     * A schedule is validated NOW, at creation, and refused if it cannot fire.
+     *
+     * The alternative is a room that says "scheduled" forever and never opens.
+     * Nobody reports that, because the failure is an absence — the host assumes
+     * people did not come, and the people assume there was no room. Rejecting
+     * here means the host finds out while they are still looking at the form.
+     */
+    let nextOccurrenceAt: Date | null = null;
+    let scheduleTimeZone: string | null = null;
+
+    if (scheduleCron !== null) {
+      // The HOST's zone, not the server's: "every night at 10pm" means 10pm
+      // where the person running the room is.
+      scheduleTimeZone = input.scheduleTimeZone ?? host.timeZone;
+
+      // Parses, and throws a ValidationError naming what IS supported.
+      parseSchedule(scheduleCron);
+
+      nextOccurrenceAt = nextOccurrence(scheduleCron, scheduleTimeZone, this.ports.clock.now());
+
+      if (nextOccurrenceAt === null) {
+        // Parses but matches no date that will ever exist — "30 February".
+        throw new ValidationError(
+          `That schedule has no future date. ${SCHEDULE_HELP}`,
+        );
+      }
+    }
+
     const slug = await this.reserveSlug(title);
 
     const room = await this.ports.rooms.create({
@@ -78,6 +111,8 @@ export class CreateRoom {
       hostUserId: host.id,
       isScheduled: scheduleCron !== null,
       scheduleCron,
+      nextOccurrenceAt,
+      scheduleTimeZone,
       maxSpeakers,
       // A room is live the moment it exists unless it is scheduled for later.
       status: scheduleCron === null ? 'live' : 'scheduled',

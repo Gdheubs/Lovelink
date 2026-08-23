@@ -89,6 +89,22 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   /** Public base URL, used to build magic links. */
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  /**
+   * Trust `x-forwarded-for` / `cf-connecting-ip` to name the real client.
+   *
+   * ONLY SAFE WHEN THE ORIGIN IS LOCKED. Behind Cloudflare with the origin
+   * firewalled to Cloudflare's ranges, these headers are authoritative because
+   * Cloudflare overwrites them. On a directly reachable origin they are
+   * attacker-controlled, and trusting them lets anyone evade every per-IP rate
+   * limit by sending a different value each request.
+   *
+   * Defaults to false so the unsafe configuration is the one you have to ask
+   * for.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
 
   // -- realtime ------------------------------------------------------------
   /**
@@ -125,9 +141,70 @@ const schema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
 
-  // -- postgres ------------------------------------------------------------
+  // -- postgres (Supabase in production) ------------------------------------
+  /*
+   * Supabase offers three connection strings and they are NOT interchangeable.
+   *
+   *   :5432 direct        one real session per connection. Use for MIGRATIONS.
+   *   :5432 pooler        session mode.
+   *   :6543 pooler        TRANSACTION mode. Use for the RUNNING APP.
+   *
+   * Transaction mode is what lets a container hold a small pool while Supabase
+   * multiplexes it across far more backends. Nothing in this codebase depends
+   * on session state (see db.ts), so it is safe — and the adapter detects the
+   * port and says so at boot.
+   *
+   * Migrations want the DIRECT connection: DDL in transaction mode is fine, but
+   * a migration is exactly the kind of long single-session operation pooling is
+   * bad at, and a failure halfway through a schema change is not worth saving a
+   * connection over.
+   */
   DATABASE_URL: z.string().default('postgres://loverlink:loverlink@localhost:5432/loverlink'),
+  /** Direct (non-pooled) URL, used only by the migration runner. Falls back to DATABASE_URL. */
+  DATABASE_DIRECT_URL: z.string().default(''),
+  /*
+   * Pool size.
+   *
+   * Small on purpose behind a transaction pooler: the pooler is what provides
+   * concurrency, and a large per-container pool just holds backends idle.
+   */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  /**
+   * Require TLS to the database.
+   *
+   * Defaults to off, because the local container has no certificate. Managed
+   * Postgres is reached across the public internet, so production refuses to
+   * start without it — see the superRefine block below.
+   */
+  DATABASE_SSL: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
+   * Verify the database's certificate.
+   *
+   * Should be true. It exists as a setting only because some managed providers
+   * present a self-signed certificate on the pooler endpoint, and being unable
+   * to connect at all is worse than an unverified-but-encrypted channel. Turning
+   * it off is a deliberate, visible choice rather than a silent default.
+   */
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true'),
+
+  // -- object storage (Cloudflare R2) --------------------------------------
+  /*
+   * R2 is S3-compatible, so this is the ordinary S3 quartet plus an endpoint.
+   * All optional: no bucket configured means the object-store port reports
+   * itself unavailable and nothing that needs it is offered.
+   */
+  R2_ACCOUNT_ID: z.string().default(''),
+  R2_ACCESS_KEY_ID: z.string().default(''),
+  R2_SECRET_ACCESS_KEY: z.string().default(''),
+  R2_BUCKET: z.string().default(''),
+  /** Public base URL for objects, if the bucket is served through a domain. */
+  R2_PUBLIC_BASE_URL: z.string().default(''),
 
   // -- redis ---------------------------------------------------------------
   REDIS_URL: z.string().default('redis://localhost:6379'),
@@ -149,6 +226,24 @@ const schema = z.object({
   MODERATOR_USER_IDS: z.string().default(''),
   /** Shared secret for the server-rendered admin pages. */
   ADMIN_TOKEN: z.string().default('dev-admin-token'),
+
+  /*
+   * WEB PUSH (VAPID).
+   *
+   * All three are optional and default to empty, because a deployment with no
+   * push is a SUPPORTED state — local development has no keys, and every
+   * feature must keep working without them. `pushConfig()` below is what turns
+   * "all three present" into a usable configuration and anything else into
+   * "push is off".
+   *
+   * Generate a pair with:  npx web-push generate-vapid-keys
+   *
+   * VAPID_SUBJECT is not decoration: it is how a push service reaches a human
+   * when a deployment misbehaves, instead of simply blocking it.
+   */
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  VAPID_SUBJECT: z.string().default(''),
 
   // -- observability -------------------------------------------------------
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
@@ -223,6 +318,39 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     if (raw.CORS_ORIGINS.includes('*')) {
       problems.push('CORS_ORIGINS must not contain a wildcard in production.');
     }
+
+    /*
+     * TLS is required when the database is reached across the PUBLIC INTERNET —
+     * which is the case for Supabase, Neon, RDS and anything else managed.
+     * Without it every row on the wire is in clear: identifiers, DM text, the
+     * trust ledger. The failure is silent, because everything works.
+     *
+     * It is NOT required when the host is private — a container on the same
+     * network, or a VPS running both. Demanding TLS there would be theatre that
+     * blocks a legitimate topology, and the original Docker Compose deployment
+     * is still one.
+     *
+     * The test is the HOST, not a flag, so nobody has to remember which case
+     * they are in.
+     */
+    if (!raw.DATABASE_SSL && !isPrivateHost(hostOf(raw.DATABASE_URL))) {
+      problems.push(
+        'DATABASE_SSL must be true when the database is not on a private network: ' +
+          'credentials and every row would cross the public internet in clear.',
+      );
+    }
+
+    /*
+     * Refuse a database URL that is obviously still pointing at a local
+     * container. The alternative is a deploy that starts cleanly, fails every
+     * request, and looks like a network problem.
+     */
+    if (/(^|@)(localhost|127\.0\.0\.1)/.test(raw.DATABASE_URL)) {
+      problems.push('DATABASE_URL still points at localhost.');
+    }
+    if (/(^|\/\/)(localhost|127\.0\.0\.1)/.test(raw.REDIS_URL)) {
+      problems.push('REDIS_URL still points at localhost.');
+    }
   }
 
   if (problems.length > 0) {
@@ -243,3 +371,45 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     isTest: raw.NODE_ENV === 'test',
   });
 }
+
+/**
+ * The hostname from a connection string, or empty when it cannot be parsed.
+ *
+ * `postgres://` is not a scheme `URL` special-cases, but it parses well enough
+ * for the hostname, which is all this needs.
+ */
+function hostOf(connectionString: string): string {
+  try {
+    return new URL(connectionString).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Whether a host is somewhere traffic never leaves a trusted network.
+ *
+ * Deliberately conservative: anything this cannot positively identify as
+ * private is treated as public, so the failure mode is "asked for TLS you did
+ * not strictly need" rather than "shipped credentials in clear".
+ *
+ * A bare name with no dots — `postgres`, `loverlink-postgres`, `db` — is a
+ * container or a service on an internal network, because a public hostname is
+ * always qualified.
+ */
+function isPrivateHost(host: string): boolean {
+  if (host.length === 0) return false;
+
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+  if (host.startsWith('127.') || host.startsWith('10.')) return true;
+  if (host.startsWith('192.168.')) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  if (host.endsWith('.internal') || host.endsWith('.local')) return true;
+  // Fly.io's private network.
+  if (host.endsWith('.flycast') || host.endsWith('.internal')) return true;
+
+  // No dot at all: a container or service name, not a public host.
+  return !host.includes('.');
+}
+
+/** True for errors we deliberately produced, false for genuine bugs. */

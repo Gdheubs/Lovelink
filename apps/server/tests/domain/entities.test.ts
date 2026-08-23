@@ -29,6 +29,7 @@ import {
   TRUST_MIN,
 } from '../../src/domain/values/trust.js';
 import { orderedPair, pairKey, asUserId } from '../../src/domain/values/ids.js';
+import { emptyStreak } from '../../src/domain/values/streaks.js';
 import { ValidationError } from '../../src/domain/errors.js';
 
 /** A literal NUL, written explicitly so it is visible in the source. */
@@ -88,6 +89,8 @@ describe('User', () => {
       trustScore: 45,
       status: 'active',
       createdAt: new Date(),
+      timeZone: 'Europe/London',
+      streak: emptyStreak(),
     };
     const profile = toPublicProfile(user);
 

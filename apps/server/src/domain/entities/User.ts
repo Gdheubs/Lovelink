@@ -1,6 +1,7 @@
 import type { UserId } from '../values/ids.js';
 import type { TrustTier } from '../values/trust.js';
 import { trustTier } from '../values/trust.js';
+import type { StreakState } from '../values/streaks.js';
 import { hasUnsafeCharacters, normalizeWhitespace, SINGLE_LINE } from '../values/text.js';
 import { ValidationError } from '../errors.js';
 
@@ -37,6 +38,23 @@ export interface User {
   readonly trustScore: number;
   readonly status: UserStatus;
   readonly createdAt: Date;
+  /**
+   * IANA timezone name, used ONLY for streak day boundaries.
+   *
+   * Stored on the account rather than read from whatever request happens to be
+   * in flight, so that a room join over a socket, a REST call and a background
+   * job all agree about which day it is for this person. Defaults to UTC until
+   * the client reports the browser's real zone.
+   */
+  readonly timeZone: string;
+  /**
+   * Show-up streak AS LAST RECORDED — deliberately not a live figure.
+   *
+   * `current` goes stale the moment a day passes without a show-up. Render
+   * `streakAsOf(...)`, never this directly; see domain/values/streaks.ts for
+   * why a broken streak is never written on read.
+   */
+  readonly streak: StreakState;
 }
 
 export const DISPLAY_NAME_MIN = 2;

@@ -97,4 +97,24 @@ export interface PresenceStore {
    * Run on an interval by the realtime process.
    */
   reapExpired(): Promise<readonly PresenceEntry[]>;
+
+  /**
+   * How many people are in rooms RIGHT NOW.
+   *
+   * WHY THIS IS A PORT METHOD RATHER THAN A LOOP OVER ROOMS
+   * -------------------------------------------------------
+   * The obvious implementation is "list live rooms, count each" — one round
+   * trip per room, on a page that refreshes. Presence already maintains a
+   * single index of every live entry (it has to, in order to expire them), so
+   * the answer is one read of a structure that exists anyway.
+   *
+   * `users` and `entries` differ, and the difference is the interesting number:
+   * one person sitting in two rooms is two entries and one user. A dashboard
+   * that conflates them overstates the audience.
+   *
+   * COST: this reads the whole live set. That is the right trade while "live"
+   * is thousands — and if it ever is not, the fix is a maintained counter, not
+   * a loop over rooms.
+   */
+  countLive(): Promise<{ entries: number; users: number; rooms: number }>;
 }

@@ -44,11 +44,15 @@ interface RoomRow {
   max_speakers: number;
   status: string;
   created_at: Date;
+  next_occurrence_at: Date | null;
+  last_opened_at: Date | null;
+  schedule_time_zone: string | null;
 }
 
 const ROOM_COLUMNS = `
   id, slug, title, category, host_user_id,
-  is_scheduled, schedule_cron, max_speakers, status, created_at
+  is_scheduled, schedule_cron, max_speakers, status, created_at,
+  next_occurrence_at, last_opened_at, schedule_time_zone
 `;
 
 function toRoom(row: RoomRow): Room {
@@ -63,6 +67,9 @@ function toRoom(row: RoomRow): Room {
     maxSpeakers: row.max_speakers,
     status: row.status as RoomStatus,
     createdAt: row.created_at,
+    nextOccurrenceAt: row.next_occurrence_at,
+    lastOpenedAt: row.last_opened_at,
+    scheduleTimeZone: row.schedule_time_zone,
   };
 }
 
@@ -93,8 +100,9 @@ export class PostgresRoomRepository implements RoomRepository {
     try {
       const row = await this.db.queryOne<RoomRow>(
         `INSERT INTO rooms
-           (id, slug, title, category, host_user_id, is_scheduled, schedule_cron, max_speakers, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           (id, slug, title, category, host_user_id, is_scheduled, schedule_cron,
+            max_speakers, status, created_at, next_occurrence_at, schedule_time_zone)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING ${ROOM_COLUMNS}`,
         [
           input.id,
@@ -107,6 +115,8 @@ export class PostgresRoomRepository implements RoomRepository {
           input.maxSpeakers,
           input.status,
           input.createdAt,
+          input.nextOccurrenceAt ?? null,
+          input.scheduleTimeZone ?? null,
         ],
       );
       return toRoom(row!);
@@ -267,5 +277,66 @@ export class PostgresRoomRepository implements RoomRepository {
       [userId, limit],
     );
     return rows.map(toRoom);
+  }
+
+  // -- scheduling ----------------------------------------------------------
+
+  async listDueSchedules(now: Date, limit: number): Promise<readonly Room[]> {
+    // Uses `rooms_due_idx`, the partial index over scheduled rooms only —
+    // ad-hoc rooms are the overwhelming majority and never belong in it.
+    const rows = await this.db.query<RoomRow>(
+      `SELECT ${ROOM_COLUMNS} FROM rooms
+        WHERE is_scheduled
+          AND next_occurrence_at IS NOT NULL
+          AND next_occurrence_at <= $1
+          AND status <> 'deleted'
+        ORDER BY next_occurrence_at ASC
+        LIMIT $2`,
+      [now, limit],
+    );
+    return rows.map(toRoom);
+  }
+
+  async claimOccurrence(input: {
+    roomId: RoomId;
+    now: Date;
+    nextOccurrenceAt: Date;
+    openedAt: Date;
+  }): Promise<boolean> {
+    // ONE statement, and the WHERE clause is the compare-and-set.
+    //
+    // "Due, and not already opened for this occurrence." The winner moves
+    // `next_occurrence_at` into the future and stamps `last_opened_at`, so the
+    // loser of a race fails BOTH halves of the predicate.
+    //
+    // Deliberately NOT `next_occurrence_at = $expected`: see the port for why
+    // timestamp equality strands every room whose occurrence was written by
+    // SQL rather than by JavaScript.
+    const claimed = await this.db.queryOne<{ id: string }>(
+      `UPDATE rooms
+          SET next_occurrence_at = $3,
+              last_opened_at     = $4,
+              status             = 'live'
+        WHERE id = $1
+          AND is_scheduled
+          AND next_occurrence_at IS NOT NULL
+          AND next_occurrence_at <= $2
+          AND (last_opened_at IS NULL OR last_opened_at < next_occurrence_at)
+        RETURNING id`,
+      [input.roomId, input.now, input.nextOccurrenceAt, input.openedAt],
+    );
+
+    return claimed !== null;
+  }
+
+  async disableSchedule(roomId: RoomId): Promise<void> {
+    // `schedule_cron` deliberately survives — see the port, and migration 0003
+    // for the constraint change that permits it.
+    await this.db.query(
+      `UPDATE rooms
+          SET is_scheduled = false, next_occurrence_at = NULL
+        WHERE id = $1`,
+      [roomId],
+    );
   }
 }

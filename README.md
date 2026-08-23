@@ -84,19 +84,36 @@ apps/
       app/              ring 2 — use cases, one file each
       adapters/         ring 3 — the ONLY place vendor SDKs appear
         memory/           an in-process fake for every port
-        postgres/  redis/  livekit/  socketio/  http/  observability/
+        postgres/  redis/  livekit/  socketio/  http/
+        push/  storage/  scheduler/  observability/
       config.ts         env validation; fails loudly at boot
       container.ts      adapter selection — the only branch on PERSISTENCE
       main.ts           composition root (API + optional in-process realtime)
       realtime.ts       standalone realtime entry point
     migrations/         numbered, hand-written SQL
-    tests/              domain/ · app/ · memory/ · adapters/
-  web/                  Next.js PWA
+    tests/              domain/ · app/ · memory/ · adapters/ · socket/
+  web/                  Next.js PWA (deploys to Vercel)
 docs/
   architecture.md       the contract — read this first
   adr/                  one record per significant decision
-index.html              the original static LoveLink page (unchanged)
+docker-compose.yml      LOCAL DEVELOPMENT ONLY — not the production topology
 ```
+
+## Where it runs
+
+| Piece | Platform | Why |
+| --- | --- | --- |
+| Web app | Vercel | Next.js |
+| API + realtime | A container — Fly, Railway, Render, VPS | Holds thousands of open WebSockets and runs the scheduler. **Cannot be serverless.** |
+| Postgres | Supabase (`:6543` pooler; `:5432` for migrations) | Managed Postgres + pgvector |
+| Redis | Managed (Upstash / Redis Cloud) | Presence, rate limits, socket fan-out, chat buffer |
+| DNS · WAF · CDN | Cloudflare | Origin locked to Cloudflare ranges |
+| Large media | Cloudflare R2 | Presigned uploads; bytes never touch the API |
+| Voice | LiveKit Cloud or self-hosted | |
+
+Supabase supplies **Postgres, not the identity model** — this app keeps its own
+auth and its own realtime, and RLS is a backstop with no permissive policies.
+The reasoning is in [ADR 0008](docs/adr/0008-managed-platform-topology.md).
 
 ## The one rule
 

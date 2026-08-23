@@ -1475,3 +1475,47 @@ body:has(.call-bar) .page {
   padding: 0.6rem;
   text-decoration: none;
 }
+
+/* ------------------------------------------------------- phase 6: streaks */
+
+.streak-count {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.streak-count strong {
+  font-size: 2rem;
+  color: var(--accent);
+  margin-right: 0.35rem;
+}
+
+/* ------------------------------------------------ phase 6: app settings */
+
+.settings .setting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.settings .setting:first-of-type {
+  border-top: none;
+}
+
+.setting-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.settings .setting p.faint {
+  margin: 0;
+  max-width: 26rem;
+}
+
+.settings .button {
+  flex-shrink: 0;
+  margin-top: 0;
+}

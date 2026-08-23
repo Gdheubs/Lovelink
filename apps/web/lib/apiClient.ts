@@ -84,7 +84,7 @@ export class ApiError extends Error {
 // ---------------------------------------------------------------------------
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Skip the refresh-and-retry dance. Used by refresh itself, to avoid a loop. */
   skipRefresh?: boolean;
@@ -199,7 +199,24 @@ export interface MyProfile {
   trustScore: number;
   tier: PublicProfile['tier'];
   memberSince: string;
+  /** IANA zone the streak's day boundaries are computed in. */
+  timeZone: string;
+  /**
+   * The streak as the SERVER computed it against now — never a raw stored
+   * counter, which goes stale the moment a day passes without a show-up.
+   */
+  streak: StreakView;
   trustHistory: { delta: number; reason: string; at: string }[];
+}
+
+export interface StreakView {
+  current: number;
+  longest: number;
+  /** True once today has been counted — the "you're safe" state. */
+  showedUpToday: boolean;
+  /** True when only the one free skip is holding the streak up. */
+  atRisk: boolean;
+  freezeAvailable: boolean;
 }
 
 export interface RoomSummary {
@@ -492,6 +509,40 @@ export const api = {
    */
   async endCall(userId: string): Promise<void> {
     await request(`/users/${encodeURIComponent(userId)}/call-end`, { method: 'POST' });
+  },
+
+  /**
+   * Tell the server which day boundary this person's streak uses.
+   *
+   * Stored on the account rather than read per-request, so a socket join, a
+   * REST call and a background job all agree about which day it is for them.
+   */
+  async setTimeZone(timeZone: string): Promise<void> {
+    await request('/me/timezone', { method: 'PUT', body: { timeZone } });
+  },
+
+  // -- push ----------------------------------------------------------------
+
+  /**
+   * The server's public VAPID key, or null when push is not configured.
+   *
+   * Null is a normal answer, not an error: a deployment without keys simply
+   * does not offer notifications, and the UI must not promise something the
+   * server cannot deliver.
+   */
+  async getPushKey(): Promise<{ publicKey: string | null }> {
+    return request('/push/key');
+  },
+
+  async registerPushSubscription(subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }): Promise<void> {
+    await request('/push/subscriptions', { method: 'PUT', body: subscription });
+  },
+
+  async removePushSubscription(endpoint: string): Promise<void> {
+    await request('/push/subscriptions', { method: 'DELETE', body: { endpoint } });
   },
 
   async health(): Promise<{ status: string; persistence: string }> {

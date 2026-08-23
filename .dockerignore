@@ -1,0 +1,16 @@
+# Everything the build does not need. A smaller context is a faster build, and
+# `.env` in an image is a leaked secret.
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/coverage
+.git
+.github
+.env
+.env.*
+!.env.example
+docs
+infra
+*.md
+*.log

@@ -1,5 +1,6 @@
 import type { IdentifierKind, User, UserStatus } from '../entities/User.js';
 import type { TrustEvent } from '../entities/TrustEvent.js';
+import type { StreakState } from '../values/streaks.js';
 import type { UserId } from '../values/ids.js';
 
 /**
@@ -55,4 +56,28 @@ export interface UserRepository {
 
   /** The user's ledger, newest first. Powers the admin view and "why am I limited?". */
   listTrustEvents(userId: UserId, limit: number): Promise<readonly TrustEvent[]>;
+
+  // -- streaks -------------------------------------------------------------
+
+  /**
+   * Persist a recomputed streak.
+   *
+   * WHY THE WHOLE STATE RATHER THAN AN INCREMENT
+   * --------------------------------------------
+   * The decision of what the streak becomes is made by a pure function in the
+   * domain, from the previous state and the user's own calendar. Offering an
+   * `incrementStreak()` here would put that decision in the adapter — where the
+   * daylight-saving arithmetic would have to be written twice, in SQL and in
+   * JavaScript, and would eventually disagree.
+   *
+   * So the adapter's whole job is to write down an answer it did not make.
+   *
+   * `lastAt` is the UTC instant; `state.lastDay` is the local day it was
+   * counted as. Both are stored: see migration 0002 for why the resolved day
+   * must never be recomputed from the instant.
+   */
+  saveStreak(id: UserId, state: StreakState, lastAt: Date): Promise<void>;
+
+  /** Change the timezone streak boundaries are computed in. */
+  updateTimeZone(id: UserId, timeZone: string): Promise<void>;
 }
