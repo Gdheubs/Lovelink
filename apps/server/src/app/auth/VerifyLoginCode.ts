@@ -77,6 +77,37 @@ export class VerifyLoginCode {
 
     const existing = await this.ports.users.findByIdentifier(identifier);
 
+    /*
+     * A NEW identifier with no name yet: ask for one, and GIVE THE CODE BACK.
+     *
+     * The order above is deliberate — the code is consumed BEFORE we look the
+     * identifier up, so that a wrong code cannot be used to probe whether an
+     * account exists. The cost is that by the time we know registration is
+     * needed, the one-time code is already destroyed.
+     *
+     * Left there, the two-step signup is impossible: the client is told to
+     * collect a name and date of birth, collects them, resubmits, and is
+     * refused because the code it was given died on the previous request. That
+     * is a dead end at the very first screen of the product.
+     *
+     * So the challenge is re-issued with the SAME code. The caller has just
+     * proved control of the identifier, so handing it back to them reveals
+     * nothing they did not already have — and the enumeration property is
+     * untouched, because anyone without a valid code still never reaches this
+     * line.
+     *
+     * The re-issue resets the attempt counter, which is correct: those attempts
+     * belonged to a challenge that was successfully answered.
+     */
+    if (existing === null && (input.displayName === undefined || input.dob === undefined)) {
+      await this.ports.challenges.issue(identifier, kind, input.code);
+
+      throw new DomainError(
+        'REGISTRATION_REQUIRED',
+        'Tell us your name and date of birth to finish creating your account.',
+      );
+    }
+
     const user =
       existing === null
         ? await this.register(identifier, kind, input)
@@ -103,14 +134,17 @@ export class VerifyLoginCode {
     kind: 'phone' | 'email',
     input: VerifyLoginCodeInput,
   ): Promise<User> {
+    /*
+     * Belt and braces. `execute` already handles this case — and re-issues the
+     * code so the caller can actually resubmit — so this is unreachable from
+     * there. It stays because `register` is private but not obviously so to a
+     * future caller, and creating an account with no display name would be a
+     * far worse outcome than a redundant check.
+     */
     if (input.displayName === undefined || input.dob === undefined) {
-      // A distinct, actionable failure: the client now knows to collect the two
-      // extra fields and resubmit. It learns this only AFTER proving control of
-      // the identifier, so it is not an enumeration signal.
       throw new DomainError(
-        'VALIDATION_FAILED',
+        'REGISTRATION_REQUIRED',
         'Tell us your name and date of birth to finish creating your account.',
-        { registrationRequired: true },
       );
     }
 

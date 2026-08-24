@@ -7,6 +7,8 @@ import type {
 } from '../../domain/ports/RoomRepository.js';
 import type { RoomId, UserId } from '../../domain/values/ids.js';
 import { asRoomId, asUserId } from '../../domain/values/ids.js';
+import type { RoomTemperature } from '../../domain/values/roomTemperature.js';
+import { DEFAULT_TEMPERATURE } from '../../domain/values/roomTemperature.js';
 import { ConflictError, NotFoundError } from '../../domain/errors.js';
 import { isPgError, PG_ERROR, type Database } from './db.js';
 
@@ -47,12 +49,13 @@ interface RoomRow {
   next_occurrence_at: Date | null;
   last_opened_at: Date | null;
   schedule_time_zone: string | null;
+  temperature: string;
 }
 
 const ROOM_COLUMNS = `
   id, slug, title, category, host_user_id,
   is_scheduled, schedule_cron, max_speakers, status, created_at,
-  next_occurrence_at, last_opened_at, schedule_time_zone
+  next_occurrence_at, last_opened_at, schedule_time_zone, temperature
 `;
 
 function toRoom(row: RoomRow): Room {
@@ -70,6 +73,8 @@ function toRoom(row: RoomRow): Room {
     nextOccurrenceAt: row.next_occurrence_at,
     lastOpenedAt: row.last_opened_at,
     scheduleTimeZone: row.schedule_time_zone,
+    // The CHECK constraint on the column is what makes this cast honest.
+    temperature: row.temperature as RoomTemperature,
   };
 }
 
@@ -101,8 +106,9 @@ export class PostgresRoomRepository implements RoomRepository {
       const row = await this.db.queryOne<RoomRow>(
         `INSERT INTO rooms
            (id, slug, title, category, host_user_id, is_scheduled, schedule_cron,
-            max_speakers, status, created_at, next_occurrence_at, schedule_time_zone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            max_speakers, status, created_at, next_occurrence_at, schedule_time_zone,
+            temperature)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING ${ROOM_COLUMNS}`,
         [
           input.id,
@@ -117,6 +123,7 @@ export class PostgresRoomRepository implements RoomRepository {
           input.createdAt,
           input.nextOccurrenceAt ?? null,
           input.scheduleTimeZone ?? null,
+          input.temperature ?? DEFAULT_TEMPERATURE,
         ],
       );
       return toRoom(row!);

@@ -1,4 +1,5 @@
 import type { Room, RoomCategory, RoomStatus } from '../entities/Room.js';
+import type { RoomTemperature } from '../values/roomTemperature.js';
 import type { RoomMember, RoomRole } from '../entities/RoomMember.js';
 import type { RoomId, UserId } from '../values/ids.js';
 
@@ -32,6 +33,8 @@ export interface CreateRoomInput {
   /** Required when `isScheduled`; the DB CHECK refuses a schedule without one. */
   readonly nextOccurrenceAt?: Date | null;
   readonly scheduleTimeZone?: string | null;
+  /** Defaults to `warm` — the least demanding thing to walk into. */
+  readonly temperature?: RoomTemperature;
   readonly maxSpeakers: number;
   readonly status: RoomStatus;
   readonly createdAt: Date;

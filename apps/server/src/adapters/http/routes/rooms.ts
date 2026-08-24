@@ -37,6 +37,8 @@ const createBody = z.object({
    */
   scheduleCron: z.string().min(1).max(120).optional(),
   scheduleTimeZone: z.string().min(1).max(64).optional(),
+  /** quiet | warm | deep. The domain refuses anything else. */
+  temperature: z.string().min(1).max(16).optional(),
 });
 
 const listQuery = z.object({
@@ -82,6 +84,7 @@ export async function registerRoomRoutes(
       ...(body.maxSpeakers === undefined ? {} : { maxSpeakers: body.maxSpeakers }),
       ...(body.scheduleCron === undefined ? {} : { scheduleCron: body.scheduleCron }),
       ...(body.scheduleTimeZone === undefined ? {} : { scheduleTimeZone: body.scheduleTimeZone }),
+      ...(body.temperature === undefined ? {} : { temperature: body.temperature }),
     });
 
     return reply.status(201).send({
@@ -92,6 +95,7 @@ export async function registerRoomRoutes(
       hostUserId: room.hostUserId,
       maxSpeakers: room.maxSpeakers,
       status: room.status,
+      temperature: room.temperature,
       createdAt: room.createdAt.toISOString(),
       // Echoed back so a host can SEE when their recurring room will first
       // open. A schedule accepted silently is one they cannot check.

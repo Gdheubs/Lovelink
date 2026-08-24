@@ -200,6 +200,41 @@ async function main(): Promise<void> {
   check('two distinct accounts', alice.userId !== bob.userId);
 
   // -- 2. the 18+ gate holds -------------------------------------------------
+  /*
+   * The signal that says "this identifier is new".
+   *
+   * Checked over REAL HTTP because that is the only place the bug could be
+   * seen: the use-case test asserted a `details` flag which is true in-process
+   * and stripped on the way out, so it passed while the sign-in form dead-ended
+   * for every new user. Whatever a client branches on has to be asserted where
+   * the client would read it.
+   */
+  step('1b. a new identifier asks for a name and date of birth');
+
+  const newcomer = `smoke-newcomer-${RUN}@loverlink.test`;
+  const newcomerCode = await requestCode(newcomer, 'newcomer');
+
+  const bare = await api<{ error?: { code: string } }>('POST', '/auth/verify', {
+    body: { identifier: newcomer, code: newcomerCode },
+  });
+
+  check('verifying without a name is refused', bare.status === 400, bare.body);
+  check(
+    'THE CLIENT CAN TELL IT APART FROM ANY OTHER 400',
+    bare.body.error?.code === 'REGISTRATION_REQUIRED',
+    bare.body.error,
+  );
+
+  const completed = await api<{ isNewAccount: boolean }>('POST', '/auth/verify', {
+    body: {
+      identifier: newcomer,
+      code: newcomerCode,
+      displayName: 'Smoke Newcomer',
+      dob: '1994-02-02',
+    },
+  });
+  check('and resubmitting with them completes signup', completed.status === 201, completed.body);
+
   step('2. the age gate');
   const minorIdentifier = `smoke-minor-${RUN}@loverlink.test`;
   const minorCode = await requestCode(minorIdentifier, 'minor');

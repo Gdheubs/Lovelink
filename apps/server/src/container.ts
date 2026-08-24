@@ -25,6 +25,7 @@ import { RedisEventBus } from './adapters/redis/RedisEventBus.js';
 import { RedisMetrics } from './adapters/redis/RedisMetrics.js';
 import { RedisPresenceStore } from './adapters/redis/RedisPresenceStore.js';
 import { RedisRateLimiter } from './adapters/redis/RedisRateLimiter.js';
+import { RedisAvailabilityStore } from './adapters/redis/RedisAvailabilityStore.js';
 
 /**
  * Adapter selection — half of the composition root.
@@ -254,6 +255,8 @@ async function createProductionContainer({ config, logger }: ContainerOptions): 
      * a change to this line and one new adapter.
      */
     jobs: new MemoryJobQueue(),
+
+    availability: new RedisAvailabilityStore(redis),
 
     // Push is OPTIONAL. With no VAPID keys the sender reports no public key,
     // clients never offer to subscribe, and every feature behaves exactly as

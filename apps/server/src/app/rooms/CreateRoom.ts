@@ -11,6 +11,7 @@ import {
 import { canAct, DENIAL_MESSAGES } from '../../domain/rules/trustLadder.js';
 import { asRoomId } from '../../domain/values/ids.js';
 import { nextOccurrence, parseSchedule, SCHEDULE_HELP } from '../../domain/values/schedule.js';
+import { DEFAULT_TEMPERATURE, isRoomTemperature } from '../../domain/values/roomTemperature.js';
 import { AuthorizationError, ConflictError, ValidationError } from '../../domain/errors.js';
 
 /**
@@ -43,6 +44,14 @@ export interface CreateRoomInput {
   readonly scheduleCron?: string | null;
   /** IANA zone the schedule means. Defaults to the host's own. */
   readonly scheduleTimeZone?: string | null;
+  /**
+   * The room's social contract. Defaults to `warm`.
+   *
+   * Asked at creation rather than configured later, because it is the one
+   * decision that shapes who should walk in — and a host who is never asked
+   * will never set it.
+   */
+  readonly temperature?: string;
 }
 
 const MAX_SLUG_ATTEMPTS = 5;
@@ -69,6 +78,13 @@ export class CreateRoom {
 
     const maxSpeakers = input.maxSpeakers ?? DEFAULT_MAX_SPEAKERS;
     assertValidMaxSpeakers(maxSpeakers);
+
+    const temperature =
+      input.temperature === undefined ? DEFAULT_TEMPERATURE : input.temperature;
+
+    if (!isRoomTemperature(temperature)) {
+      throw new ValidationError('Choose what kind of conversation this room is for.');
+    }
 
     const scheduleCron = input.scheduleCron ?? null;
 
@@ -113,6 +129,7 @@ export class CreateRoom {
       scheduleCron,
       nextOccurrenceAt,
       scheduleTimeZone,
+      temperature,
       maxSpeakers,
       // A room is live the moment it exists unless it is scheduled for later.
       status: scheduleCron === null ? 'live' : 'scheduled',

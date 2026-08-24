@@ -22,6 +22,18 @@ export type DomainErrorCode =
   | 'UNDERAGE'
   | 'INVALID_CREDENTIALS'
   | 'INVALID_CODE'
+  /*
+   * The identifier is new and the account needs a name and date of birth.
+   *
+   * A CODE rather than a flag in `details`, because `details` is log-only and
+   * never reaches a client — which is exactly how this broke: the sign-in
+   * screen looked for a field the server deliberately does not send, so the
+   * form never advanced and the user was told to enter a name with nowhere to
+   * enter it.
+   *
+   * Anything a client must BRANCH on belongs in the code.
+   */
+  | 'REGISTRATION_REQUIRED'
   // authorization
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
@@ -111,6 +123,7 @@ export function httpStatusForCode(code: DomainErrorCode): number {
     case 'VALIDATION_FAILED':
     case 'UNDERAGE':
     case 'INVALID_CODE':
+    case 'REGISTRATION_REQUIRED':
       return 400;
     case 'UNAUTHENTICATED':
     case 'INVALID_CREDENTIALS':

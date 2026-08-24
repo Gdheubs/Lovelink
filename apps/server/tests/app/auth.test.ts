@@ -132,7 +132,21 @@ describe('auth', () => {
       expect(result.tokens.refreshToken).toBeTruthy();
     });
 
-    it('asks for a name and date of birth when the identifier is new', async () => {
+    /**
+     * SIGNALS REGISTRATION WITH A CODE, NOT A DETAIL.
+     *
+     * This test used to assert `details.registrationRequired === true`. That is
+     * true server-side, so it passed — while the feature was completely broken
+     * for every real user, because `details` NEVER LEAVES THE SERVER (see
+     * errors.ts and the HTTP error mapper). The sign-in screen branched on a
+     * field it could not receive, so it never advanced past the code step and
+     * told people to enter a name with no field to enter one in.
+     *
+     * The lesson is the assertion, not the bug: a test that checks an internal
+     * cannot notice that the contract is broken. Anything a client must branch
+     * on has to be asserted as the thing that crosses the boundary.
+     */
+    it('signals a new account with a CODE the client can actually see', async () => {
       const requested = await useCases.requestLoginCode.execute({ identifier: EMAIL, ip: IP });
 
       try {
@@ -143,9 +157,62 @@ describe('auth', () => {
         });
         expect.unreachable('should have required registration details');
       } catch (error) {
-        expect((error as DomainError).code).toBe('VALIDATION_FAILED');
-        expect((error as DomainError).details.registrationRequired).toBe(true);
+        // The code, because that is what the HTTP edge sends.
+        expect((error as DomainError).code).toBe('REGISTRATION_REQUIRED');
       }
+    });
+
+    /**
+     * THE CODE SURVIVES BEING TOLD TO REGISTER.
+     *
+     * The second half of the same bug, and the worse half. Verification
+     * CONSUMES the challenge before the identifier is looked up — deliberately,
+     * so a wrong code cannot probe whether an account exists. The consequence
+     * was that by the time the server said "give me a name", the code it had
+     * just been given was already destroyed.
+     *
+     * So the two-step signup could never complete: enter code, get asked for a
+     * name, enter the name, get refused. A dead end on the first screen of the
+     * product, and invisible to every test that registered in one call.
+     */
+    it('LETS THE SAME CODE FINISH THE SIGNUP IT WAS REJECTED FOR', async () => {
+      const requested = await useCases.requestLoginCode.execute({ identifier: EMAIL, ip: IP });
+      const code = requested.devCode!;
+
+      await expect(
+        useCases.verifyLoginCode.execute({ identifier: EMAIL, code, ip: IP }),
+      ).rejects.toMatchObject({ code: 'REGISTRATION_REQUIRED' });
+
+      // The SAME code, now with the details it asked for.
+      const result = await useCases.verifyLoginCode.execute({
+        identifier: EMAIL,
+        code,
+        displayName: 'Priya',
+        dob: '1995-04-12',
+        ip: IP,
+      });
+
+      expect(result.isNewAccount).toBe(true);
+      expect(result.profile.displayName).toBe('Priya');
+    });
+
+    it('and the code is single-use once it has actually created the account', async () => {
+      const requested = await useCases.requestLoginCode.execute({ identifier: EMAIL, ip: IP });
+      const code = requested.devCode!;
+
+      await useCases.verifyLoginCode.execute({
+        identifier: EMAIL,
+        code,
+        displayName: 'Priya',
+        dob: '1995-04-12',
+        ip: IP,
+      });
+
+      // Re-issuing on the registration path must not have weakened this: a code
+      // that worked once must never work twice.
+      await expect(
+        useCases.verifyLoginCode.execute({ identifier: EMAIL, code, ip: IP }),
+      ).rejects.toBeTruthy();
     });
 
     it('ENFORCES the 18+ gate server-side', async () => {

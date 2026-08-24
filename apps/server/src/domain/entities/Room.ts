@@ -1,4 +1,5 @@
 import type { RoomId, UserId } from '../values/ids.js';
+import type { RoomTemperature } from '../values/roomTemperature.js';
 import { hasUnsafeCharacters, normalizeWhitespace, SINGLE_LINE } from '../values/text.js';
 import { ValidationError } from '../errors.js';
 
@@ -44,6 +45,15 @@ export interface Room {
   readonly lastOpenedAt: Date | null;
   /** IANA zone the schedule is expressed in. "10pm" means 10pm where the host is. */
   readonly scheduleTimeZone: string | null;
+  /**
+   * The host's social contract: what this room is FOR.
+   *
+   * Distinct from the pulse, which is what it currently FEELS like. The pulse
+   * is voted on and drifts; this does not, because a room whose purpose moves
+   * with whoever turned up is unusable for the people who needed it to stay
+   * one thing. See domain/values/roomTemperature.ts.
+   */
+  readonly temperature: RoomTemperature;
 }
 
 export const ROOM_TITLE_MIN = 3;

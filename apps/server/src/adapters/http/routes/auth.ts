@@ -109,9 +109,12 @@ export async function registerAuthRoutes(
   /**
    * POST /auth/verify
    *
-   * Logs in or registers, depending on whether the identifier is known. A 400
-   * with `registrationRequired` in the details means "we need a name and a date
-   * of birth" — the client collects them and resubmits.
+   * Logs in or registers, depending on whether the identifier is known.
+   *
+   * A 400 with code `REGISTRATION_REQUIRED` means "we need a name and a date of
+   * birth" — the client collects them and resubmits. It is a CODE and not a
+   * detail because `details` never leaves the server, and a client that has to
+   * branch on something can only branch on what it receives.
    */
   app.post('/auth/verify', async (request, reply) => {
     const body = verifyBody.parse(request.body);

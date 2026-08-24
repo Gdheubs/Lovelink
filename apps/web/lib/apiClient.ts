@@ -69,9 +69,16 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 
-  /** The account needs a name and date of birth before it can be created. */
+  /**
+   * The account needs a name and date of birth before it can be created.
+   *
+   * Reads the CODE. An earlier version looked for a flag in `details`, which
+   * the server never sends — `details` is log-only — so this was always false
+   * and the sign-in form never advanced past the code step. The user was told
+   * to enter a name, with no field to enter one in.
+   */
   get needsRegistration(): boolean {
-    return this.code === 'VALIDATION_FAILED' && this.details?.registrationRequired === true;
+    return this.code === 'REGISTRATION_REQUIRED';
   }
 
   get isUnauthenticated(): boolean {

@@ -6,6 +6,7 @@ import type {
   RoomRepository,
 } from '../../domain/ports/RoomRepository.js';
 import type { RoomId, UserId } from '../../domain/values/ids.js';
+import { DEFAULT_TEMPERATURE } from '../../domain/values/roomTemperature.js';
 import { ConflictError, NotFoundError } from '../../domain/errors.js';
 
 /**
@@ -33,6 +34,7 @@ export class MemoryRoomRepository implements RoomRepository {
       nextOccurrenceAt: input.nextOccurrenceAt ?? null,
       scheduleTimeZone: input.scheduleTimeZone ?? null,
       lastOpenedAt: null,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
     });
     this.rooms.set(room.id, room);
     this.slugs.set(room.slug, room.id);

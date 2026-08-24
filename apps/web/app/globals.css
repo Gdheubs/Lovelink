@@ -1,40 +1,88 @@
 /*
- * Loverlink visual language.
+ * Loverlink visual language — a midnight lounge.
  *
- * Dark by default, and not as a style preference: the product's anchor use case
- * is a late-night talk room on a phone in a dark bedroom. A bright screen at 2am
- * is a reason to close the app.
+ * WHAT THIS IS DELIBERATELY NOT
+ * -----------------------------
+ * Not the default dark-mode social app: no neon, no glassmorphism, no glowing
+ * buttons, no gradient that draws the eye for its own sake. Those read as
+ * "engagement product", and this is the opposite of one — a place where the
+ * correct behaviour is often to sit quietly and not perform.
  *
- * Everything is a token so that Phase 6's polish pass is a change to this block
- * rather than a hunt through components.
+ * The reference is a dim room at 1am rather than a dashboard. Deep charcoal
+ * with a violet cast, warm off-white text instead of pure white (which glares
+ * at that hour), and two muted accents that never both shout.
+ *
+ * TYPOGRAPHY IS EDITORIAL, NOT UI-KIT. Large, quiet headings with real
+ * line-height and generous space around them. The interface should feel closer
+ * to a well-set page than to a control panel, because most screens here are
+ * asking someone a question rather than presenting them with controls.
+ *
+ * Everything is a token, which is what made this repaint a change to one block.
  */
 
 :root {
-  --bg: #100a18;
-  --bg-raised: #191024;
-  --bg-input: #201530;
-  --border: #2f2140;
-  --border-strong: #43305c;
+  /* -- surfaces ---------------------------------------------------------- */
+  /* Charcoal with a violet cast rather than pure black: black on OLED is a
+     hole in the screen, and the small amount of colour makes the accents sit
+     in the same world rather than on top of it. */
+  --bg: #14121a;
+  --bg-raised: #1c1a24;
+  --bg-input: #23202d;
+  --border: #2b2833;
+  --border-strong: #3d3949;
 
-  --text: #f4eefb;
-  --text-muted: #a996bd;
-  --text-faint: #6f5f83;
+  /* -- text -------------------------------------------------------------- */
+  /* Warm off-white, never #fff. At 2am pure white on charcoal is a glare, and
+     the warmth is most of what makes the screen feel like lamplight. */
+  --text: #ece7e1;
+  --text-muted: #a29cae;
+  --text-faint: #6e6879;
 
-  --accent: #d98cae;
-  --accent-strong: #c4527d;
-  --accent-soft: rgba(217, 140, 174, 0.12);
+  /* -- accents ----------------------------------------------------------- */
+  /* Muted lavender leads. It is soft enough to sit under text without
+     competing, which matters because it marks state far more often than it
+     marks a call to action. */
+  --accent: #b5a7d6;
+  --accent-strong: #8f7fc0;
+  --accent-soft: rgba(181, 167, 214, 0.1);
 
-  --danger: #e06b7f;
-  --success: #6bc4a0;
+  /* The second accent, used ONLY for live presence — someone is actually here,
+     right now. Reserving a colour for one meaning is what lets it be read at a
+     glance rather than decoded. */
+  --present: #7fa8c9;
+  --present-soft: rgba(127, 168, 201, 0.12);
 
-  --radius: 14px;
-  --radius-lg: 22px;
+  /* Muted on purpose. A destructive action should be legible, not alarming —
+     the person reaching for it is often already having a bad time. */
+  --danger: #c98b8b;
+  --success: #8bbfa4;
+
+  /* -- shape ------------------------------------------------------------- */
+  /* Softer and larger than the old set. Rounded corners at this radius read as
+     "card on a table" rather than "button in an app". */
+  --radius-sm: 12px;
+  --radius: 18px;
+  --radius-lg: 26px;
 
   /* Safe areas matter: this is a PWA that runs full-screen on notched phones. */
-  --page-padding: 1.25rem;
+  --page-padding: 1.35rem;
+  /* Height of the persistent bottom navigation, so every scrolling surface can
+     leave room for it without guessing. */
+  --nav-height: 4.25rem;
 
+  /* -- type -------------------------------------------------------------- */
+  /* A serif for display, because it is the single cheapest way to stop looking
+     like every other app — and it suits a product about conversation rather
+     than consumption. System serifs are used rather than a webfont: a font
+     download is a blank heading on the slow connection this is built for. */
+  --font-display: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Three levels, and only three. See the type scale below. */
+  --step-lg: clamp(1.6rem, 5.5vw, 2.15rem);
+  --step-md: 1.05rem;
+  --step-sm: 0.82rem;
 }
 
 *,
@@ -55,10 +103,102 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 1.55;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   /* Stops iOS bouncing the whole page when a scrollable area hits its end. */
   overscroll-behavior-y: none;
+}
+
+/* ------------------------------------------------------------------- type
+ *
+ * THREE LEVELS, AND ONLY THREE.
+ *
+ *   .t-lg   the question a screen is asking      — serif, large, quiet
+ *   .t-md   the name of a thing                  — sans, plain
+ *   .t-sm   the facts about it                   — sans, small, muted
+ *
+ * The restraint is the point. A screen with four type sizes has no hierarchy,
+ * it has decoration; three forces every element to declare which of those it
+ * actually is.
+ */
+
+.t-lg {
+  font-family: var(--font-display);
+  font-size: var(--step-lg);
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+  font-weight: 400;
+  margin: 0 0 0.6rem;
+}
+
+.t-md {
+  font-size: var(--step-md);
+  font-weight: 500;
+  margin: 0;
+}
+
+.t-sm {
+  font-size: var(--step-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* An overline, for the few places a section needs naming without a heading. */
+.t-over {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 0.75rem;
+}
+
+/*
+ * Live presence. The ONE place the second accent is used.
+ *
+ * Reserving a colour for a single meaning is what lets someone read it without
+ * decoding it: blue here always and only means a person is in that room right
+ * now.
+ */
+.present {
+  color: var(--present);
+}
+
+.present-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--present);
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  /* A slow breath rather than a blink. Presence is calm, not urgent. */
+  animation: breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/*
+ * Animation exists to explain a state change, never to decorate one.
+ *
+ * And it is skipped entirely for anyone who has asked their device for less
+ * motion — a preference this product should honour without being asked twice.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ------------------------------------------------------------------ layout */
@@ -196,9 +336,21 @@ body {
   cursor: not-allowed;
 }
 
+/*
+ * A flat, muted fill rather than a gradient.
+ *
+ * The old button was a pink gradient, which is the visual grammar of a
+ * conversion funnel. This one is legible and unhurried — the reference is a
+ * door handle, not a call to action.
+ */
 .button--primary {
-  background: linear-gradient(135deg, var(--accent-strong), #8d2f56);
-  color: #fff;
+  background: var(--accent-strong);
+  color: #14121a;
+  font-weight: 500;
+}
+
+.button--primary:hover:not(:disabled) {
+  background: var(--accent);
 }
 
 .button--secondary {
@@ -1518,4 +1670,166 @@ body:has(.call-bar) .page {
 .settings .button {
   flex-shrink: 0;
   margin-top: 0;
+}
+
+/* ================================================================ welcome
+ *
+ * The front door. Editorial rather than app-like: a serif quote with room
+ * around it, then the explanation, then one way in.
+ */
+
+.welcome {
+  min-height: 100dvh;
+  padding: max(var(--page-padding), env(safe-area-inset-top)) var(--page-padding)
+    max(2.5rem, env(safe-area-inset-bottom));
+  max-width: 32rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-quiet {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+/*
+ * The hero holds the viewport on first paint, so the quote is the only thing
+ * in view. `min-height` rather than a fixed height: a small phone in landscape
+ * should scroll rather than clip the sentence.
+ */
+.welcome-hero {
+  min-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.welcome-quote {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 6vw, 2.05rem);
+  line-height: 1.32;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 1.75rem 0 1.25rem;
+  /* No quotation marks and no attribution: it is the product talking, not a
+     citation, and punctuating it as a pull-quote would make it decorative. */
+  border: none;
+  padding: 0;
+}
+
+.welcome-sub {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin: 0;
+  max-width: 24rem;
+}
+
+/*
+ * The reveal.
+ *
+ * Opacity and a few pixels of travel, nothing else — no scale, no blur, no
+ * stagger beyond the three beats. The job is to make the sentence land, not to
+ * be noticed as an animation.
+ */
+.reveal-1,
+.reveal-2,
+.reveal-3 {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.beat-1 .reveal-1,
+.beat-2 .reveal-1,
+.beat-3 .reveal-1,
+.beat-2 .reveal-2,
+.beat-3 .reveal-2,
+.beat-3 .reveal-3 {
+  opacity: 1;
+  transform: none;
+}
+
+/* The body section is itself a reveal target, so it fades in as a block. */
+.welcome-body {
+  padding-bottom: 1rem;
+}
+
+/* -------------------------------------------------------------- the steps */
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.steps li {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.step-n {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  color: var(--accent);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  width: 1.85rem;
+  height: 1.85rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.steps .t-sm {
+  margin-top: 0.2rem;
+  max-width: 26rem;
+}
+
+/* ------------------------------------------------------- what is not here */
+
+.nots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.nots li {
+  position: relative;
+  padding-left: 1.15rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+/* A dash rather than a tick: these are absences, and a checkmark would read as
+   a feature list. */
+.nots li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--text-faint);
+}
+
+.welcome-actions {
+  margin-top: 2.5rem;
+}
+
+.welcome-age {
+  margin-top: 0.85rem;
+  color: var(--text-faint);
 }

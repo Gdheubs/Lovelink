@@ -51,6 +51,7 @@ import type { PushSubscriptionRepository } from './PushSubscriptionRepository.js
 import type { PushSender } from './PushSender.js';
 import type { ObjectStore } from './ObjectStore.js';
 import type { JobQueue } from './JobQueue.js';
+import type { AvailabilityStore } from './AvailabilityStore.js';
 import type { TokenService } from './TokenService.js';
 import type { UserRepository } from './UserRepository.js';
 
@@ -79,6 +80,8 @@ export interface Ports {
   readonly objects: ObjectStore;
   /** Work that must not happen inside a request. Consumed by workers, not here. */
   readonly jobs: JobQueue;
+  /** Tonight's intent and open door. Expires on its own; fails closed. */
+  readonly availability: AvailabilityStore;
   readonly reports: ReportRepository;
   readonly relationships: RelationshipRepository;
   readonly messages: MessageRepository;

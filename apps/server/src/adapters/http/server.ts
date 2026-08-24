@@ -14,6 +14,7 @@ import { registerSafetyRoutes } from './routes/safety.js';
 import { registerSurpriseRoutes } from './routes/surprises.js';
 import { registerConnectionRoutes } from './routes/connections.js';
 import { registerPushRoutes } from './routes/push.js';
+import { registerHomeRoutes } from './routes/home.js';
 import formbody from '@fastify/formbody';
 
 /**
@@ -134,6 +135,7 @@ export async function createHttpServer(deps: HttpServerDeps): Promise<FastifyIns
   await registerSurpriseRoutes(app, deps);
   await registerConnectionRoutes(app, deps);
   await registerPushRoutes(app, deps);
+  await registerHomeRoutes(app, deps);
   await registerAdminRoutes(app, deps);
 
   return app;

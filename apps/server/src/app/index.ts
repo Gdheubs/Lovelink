@@ -25,6 +25,7 @@ import { ClaimReport, ListReportQueue, ResolveReport } from './safety/ReviewRepo
 import { BlockUser, UnblockUser } from './safety/BlockUser.js';
 import { KickUser } from './safety/KickUser.js';
 import { GetDashboard } from './admin/GetDashboard.js';
+import { ClearIntent, GetHome, SetIntent } from './home/GetHome.js';
 import {
   RegisterPushSubscription,
   RemovePushSubscription,
@@ -67,6 +68,7 @@ export * from './safety/ReviewReports.js';
 export * from './safety/BlockUser.js';
 export * from './safety/KickUser.js';
 export * from './admin/GetDashboard.js';
+export * from './home/GetHome.js';
 export * from './push/ManagePushSubscriptions.js';
 export * from './surprises/CreateSurprise.js';
 export * from './surprises/RedeemSurprise.js';
@@ -146,6 +148,11 @@ export interface UseCases {
   readonly unblockUser: UnblockUser;
   readonly kickUser: KickUser;
   readonly getDashboard: GetDashboard;
+
+  // -- home -----------------------------------------------------------------
+  readonly getHome: GetHome;
+  readonly setIntent: SetIntent;
+  readonly clearIntent: ClearIntent;
 
   // -- push -----------------------------------------------------------------
   readonly registerPushSubscription: RegisterPushSubscription;
@@ -245,6 +252,10 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     unblockUser: new UnblockUser(ports),
     kickUser: new KickUser(ports, leaveRoom),
     getDashboard: new GetDashboard(ports),
+
+    getHome: new GetHome(ports),
+    setIntent: new SetIntent(ports),
+    clearIntent: new ClearIntent(ports),
 
     registerPushSubscription: new RegisterPushSubscription(ports),
     removePushSubscription: new RemovePushSubscription(ports),

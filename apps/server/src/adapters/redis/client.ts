@@ -96,4 +96,11 @@ export const KEY = {
   metricTotal: (name: string) => `loverlink:metric:total:${name}`,
   metricDaily: (name: string, day: string) => `loverlink:metric:day:${name}:${day}`,
   busChannel: (channel: string) => `loverlink:bus:${channel}`,
+  /* Tonight's state. Both carry a TTL — see AvailabilityStore for why losing
+     them must CLOSE a door rather than leave one open. */
+  intent: (userId: string) => `loverlink:tonight:intent:${userId}`,
+  openDoor: (userId: string) => `loverlink:tonight:door:${userId}`,
+  /* Room pulse: a hash of userId -> feeling, with a whole-key TTL so a room's
+     mood decays rather than accumulating. */
+  roomPulse: (roomId: string) => `loverlink:pulse:${roomId}`,
 } as const;
