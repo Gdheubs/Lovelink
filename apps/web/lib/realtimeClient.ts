@@ -68,6 +68,7 @@ export interface RoomMemberView {
   user: PublicProfileView;
   role: 'listener' | 'speaker' | 'host';
   mutedByHost: boolean;
+  /** True only in the host's snapshot. Always false for anybody else. */
   handRaised: boolean;
 }
 
@@ -86,7 +87,20 @@ export interface RoomState {
   hostUserId: string;
   maxSpeakers: number;
   members: RoomMemberView[];
+  /** Who has a hand up — the HOST's snapshot only. Empty for everyone else. */
   raisedHands: string[];
+  /**
+   * Where THIS viewer stands.
+   *
+   * Position and a coarse wait, naming nobody else. The queue itself is not
+   * sent to a listener: showing who is ahead of you turns waiting into a
+   * scoreboard.
+   */
+  yourStanding: {
+    state: 'listening' | 'waiting' | 'next' | 'speaking';
+    position: number | null;
+    wait: string | null;
+  };
   recentMessages: ChatMessageView[];
   selfRole: 'listener' | 'speaker' | 'host';
   /**

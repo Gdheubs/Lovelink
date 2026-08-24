@@ -363,6 +363,17 @@ export interface HomeView {
   nights: number;
 }
 
+export type RoomFeeling = 'calm' | 'thoughtful' | 'playful' | 'warm' | 'heavy';
+
+export interface RoomPulse {
+  /** One line, or null when there is nothing safe to say. */
+  description: string | null;
+  slices: { feeling: RoomFeeling; share: number }[];
+  /** People have said, but too few to show without identifying them. */
+  tooFewToShow: boolean;
+  yours: RoomFeeling | null;
+}
+
 export const api = {
   /**
    * Ask for a login code.
@@ -579,6 +590,23 @@ export const api = {
 
   async clearIntent(): Promise<void> {
     await request('/me/intent', { method: 'DELETE' });
+  },
+
+  /**
+   * How the room feels. Members only.
+   *
+   * `description` is null when too few people have said — the server decides
+   * that, and the client must not try to reconstruct a mood from `slices`.
+   */
+  async getRoomPulse(roomId: string): Promise<RoomPulse> {
+    return request(`/rooms/${encodeURIComponent(roomId)}/pulse`);
+  },
+
+  async setRoomFeeling(roomId: string, feeling: RoomFeeling): Promise<void> {
+    await request(`/rooms/${encodeURIComponent(roomId)}/pulse`, {
+      method: 'PUT',
+      body: { feeling },
+    });
   },
 
   // -- push ----------------------------------------------------------------

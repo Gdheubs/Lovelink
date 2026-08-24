@@ -133,6 +133,9 @@ export async function registerRoomRoutes(
       hostUserId: room.hostUserId,
       maxSpeakers: room.maxSpeakers,
       status: room.status,
+      // The host's contract. The room screen leads with it, so a room that
+      // did not send it would silently claim to be `warm`.
+      temperature: room.temperature,
       memberCount: await ports.presence.countRoomMembers(room.id),
       createdAt: room.createdAt.toISOString(),
     });

@@ -2023,3 +2023,246 @@ body:has(.call-bar) .page {
   color: var(--text-faint);
   text-align: center;
 }
+
+/* ================================================================== a room
+ *
+ * Four zones, top to bottom: where am I · what is happening · what happens
+ * to me · what can I do. The room fills the screen; the actions are a thin
+ * quiet row at the bottom, because the room is the thing here.
+ */
+
+.room {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(var(--page-padding), env(safe-area-inset-top)) var(--page-padding) 0;
+  max-width: 34rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ------------------------------------------------------ 1. where am I? */
+
+.room-id {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.room-id__name {
+  margin-bottom: 0.15rem;
+}
+
+.room-id__temp {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+}
+
+/*
+ * The room's promise. Given the same left rule as a quotation, because that
+ * is what it is — the host saying what this place is for, and the most useful
+ * sentence on the screen.
+ */
+.room-id__says {
+  border-left: 2px solid var(--border-strong);
+  padding-left: 0.8rem;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------- 2. what's happening? */
+
+.room-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.speakers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.speaker {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.speaker__name {
+  font-size: 0.95rem;
+}
+
+.speaker__host {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}
+
+.room-listeners {
+  line-height: 1.6;
+}
+
+/*
+ * The pulse. One sentence, no chart, no percentages — set in the display
+ * serif so it reads as the room describing itself rather than as a readout.
+ */
+.room-pulse {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--text);
+  margin: 0;
+  padding: 0.9rem 1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.room-feel {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.feelings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.feelings__note {
+  flex-basis: 100%;
+  color: var(--text-faint);
+  margin: 0.35rem 0 0;
+}
+
+/* The host's queue: names and one action, no clock. */
+.hands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hands li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.hands button {
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.8rem;
+  min-height: 34px;
+  cursor: pointer;
+}
+
+.room-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* ---------------------------------------------- 4. what happens to me?
+ *
+ * A SENTENCE, not a status panel. It sits directly above the actions, so the
+ * last thing read before acting is what your own state is.
+ */
+
+.room-you {
+  margin: 0;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+/* --------------------------------------------------- 3. what can I do?
+ *
+ * Visually secondary on purpose: a row of quiet text rather than a toolbar of
+ * buttons. These are how you act on the room; the room is what matters.
+ */
+
+.room-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0 max(0.9rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+
+.room-actions button,
+.room-actions a {
+  background: none;
+  border: none;
+  padding: 0.45rem 0.25rem;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-decoration: none;
+  cursor: pointer;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.room-actions button:hover,
+.room-actions a:hover {
+  color: var(--text);
+}
+
+/* Leaving is always available and never emphasised. */
+.room-leave {
+  color: var(--text-faint) !important;
+}
+
+.room-leave:hover {
+  color: var(--danger) !important;
+}
+
+/*
+ * Where YOU are in the room.
+ *
+ * Quiet on purpose: not a badge, not a highlight, not a brighter avatar. It
+ * answers "which group am I in" so nobody has to scan a list to find
+ * themselves — and marking yourself loudly in a room full of other people is
+ * the thing this product is least interested in doing.
+ */
+.room-me {
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.82rem;
+  color: var(--text-faint);
+}
