@@ -52,6 +52,7 @@ import type { PushSender } from './PushSender.js';
 import type { ObjectStore } from './ObjectStore.js';
 import type { JobQueue } from './JobQueue.js';
 import type { AvailabilityStore } from './AvailabilityStore.js';
+import type { RoomPulseStore } from './RoomPulseStore.js';
 import type { TokenService } from './TokenService.js';
 import type { UserRepository } from './UserRepository.js';
 
@@ -82,6 +83,8 @@ export interface Ports {
   readonly jobs: JobQueue;
   /** Tonight's intent and open door. Expires on its own; fails closed. */
   readonly availability: AvailabilityStore;
+  /** How a room feels. Decays; never exposes who said what. */
+  readonly pulse: RoomPulseStore;
   readonly reports: ReportRepository;
   readonly relationships: RelationshipRepository;
   readonly messages: MessageRepository;

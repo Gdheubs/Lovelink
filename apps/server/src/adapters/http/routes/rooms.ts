@@ -47,6 +47,11 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).optional(),
 });
 
+const roomParam = z.object({ id: z.string().uuid() });
+
+/** One of the ways a ROOM can feel, never how a person feels. */
+const pulseBody = z.object({ feeling: z.string().min(1).max(16) });
+
 export async function registerRoomRoutes(
   app: FastifyInstance,
   deps: HttpServerDeps,
@@ -115,7 +120,7 @@ export async function registerRoomRoutes(
    * user's whereabouts across the platform.
    */
   app.get('/rooms/:id', { preHandler: requireAuth(useCases) }, async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = roomParam.parse(request.params);
     const room = await ports.rooms.findById(asRoomId(params.id));
 
     if (room === null) throw new NotFoundError('Room');
@@ -132,4 +137,39 @@ export async function registerRoomRoutes(
       createdAt: room.createdAt.toISOString(),
     });
   });
+
+  /**
+   * GET /rooms/:id/pulse — how the room feels.
+   *
+   * Members only. Someone browsing the list gets occupancy and the room's own
+   * stated contract, which is enough to decide whether to walk in; a mood
+   * reported by strangers to strangers would be a rating.
+   */
+  app.get('/rooms/:id/pulse', { preHandler: requireAuth(useCases) }, async (request, reply) => {
+    const params = roomParam.parse(request.params);
+    const actor = actorOf(request);
+
+    return reply.send(await useCases.getRoomPulse.execute(actor.user, asRoomId(params.id)));
+  });
+
+  /**
+   * PUT /rooms/:id/pulse — say how it feels.
+   *
+   * PUT because it replaces this person's previous answer. One vote each is a
+   * property of the storage rather than a check, so there is nothing here to
+   * flood.
+   */
+  app.put('/rooms/:id/pulse', { preHandler: requireAuth(useCases) }, async (request, reply) => {
+    const params = roomParam.parse(request.params);
+    const body = pulseBody.parse(request.body);
+    const actor = actorOf(request);
+
+    await useCases.voteOnRoomFeeling.execute(actor.user, {
+      roomId: asRoomId(params.id),
+      feeling: body.feeling,
+    });
+
+    return reply.status(204).send();
+  });
 }
+

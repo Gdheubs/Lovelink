@@ -20,6 +20,7 @@ import { MemoryPushSender } from './MemoryPushSender.js';
 import { MemoryObjectStore } from './MemoryObjectStore.js';
 import { MemoryJobQueue } from './MemoryJobQueue.js';
 import { MemoryAvailabilityStore } from './MemoryAvailabilityStore.js';
+import { MemoryRoomPulseStore } from './MemoryRoomPulseStore.js';
 import { MemoryPushSubscriptionRepository } from './MemoryPushSubscriptionRepository.js';
 import { MemoryTokenService } from './MemoryTokenService.js';
 import { MemoryUserRepository } from './MemoryUserRepository.js';
@@ -91,6 +92,7 @@ export interface MemoryPorts extends Ports {
   readonly objects: MemoryObjectStore;
   readonly jobs: MemoryJobQueue;
   readonly availability: MemoryAvailabilityStore;
+  readonly pulse: MemoryRoomPulseStore;
   readonly reports: MemoryReportRepository;
   readonly relationships: MemoryRelationshipRepository;
   readonly messages: MemoryMessageRepository;
@@ -165,6 +167,7 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
   const objects = new MemoryObjectStore();
   const jobs = new MemoryJobQueue();
   const availability = new MemoryAvailabilityStore(clock);
+  const pulse = new MemoryRoomPulseStore(clock);
 
   return {
     clock,
@@ -179,6 +182,7 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
     objects,
     jobs,
     availability,
+    pulse,
     reports,
     relationships,
     messages,
@@ -200,6 +204,7 @@ export function createMemoryPorts(options: MemoryPortsOptions = {}): MemoryPorts
       objects.clear();
       jobs.clear();
       availability.clear();
+      pulse.clearAll();
       reports.clear();
       relationships.clear();
       messages.clear();

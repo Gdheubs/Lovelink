@@ -13,6 +13,7 @@ import { JoinRoom } from './rooms/JoinRoom.js';
 import { LeaveRoom } from './rooms/LeaveRoom.js';
 import { ListRooms } from './rooms/ListRooms.js';
 import { OpenScheduledRooms } from './rooms/OpenScheduledRooms.js';
+import { GetRoomPulse, VoteOnRoomFeeling } from './rooms/RoomPulse.js';
 import { SendChatMessage, SendTypingIndicator } from './chat/SendChatMessage.js';
 import { SendReaction } from './chat/SendReaction.js';
 import { RaiseHand } from './speaking/RaiseHand.js';
@@ -55,6 +56,7 @@ export * from './rooms/JoinRoom.js';
 export * from './rooms/LeaveRoom.js';
 export * from './rooms/ListRooms.js';
 export * from './rooms/OpenScheduledRooms.js';
+export * from './rooms/RoomPulse.js';
 export * from './rooms/roomStateView.js';
 export * from './chat/SendChatMessage.js';
 export * from './chat/SendReaction.js';
@@ -124,6 +126,8 @@ export interface UseCases {
   readonly leaveRoom: LeaveRoom;
   readonly heartbeat: Heartbeat;
   readonly openScheduledRooms: OpenScheduledRooms;
+  readonly voteOnRoomFeeling: VoteOnRoomFeeling;
+  readonly getRoomPulse: GetRoomPulse;
 
   // -- chat ----------------------------------------------------------------
   readonly sendChatMessage: SendChatMessage;
@@ -231,6 +235,8 @@ export function createUseCases(ports: Ports, options: UseCaseOptions): UseCases 
     leaveRoom,
     heartbeat: new Heartbeat(ports),
     openScheduledRooms: new OpenScheduledRooms(ports),
+    voteOnRoomFeeling: new VoteOnRoomFeeling(ports),
+    getRoomPulse: new GetRoomPulse(ports),
 
     sendChatMessage: new SendChatMessage(ports),
     sendTypingIndicator: new SendTypingIndicator(ports),

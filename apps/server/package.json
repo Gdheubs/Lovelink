@@ -21,7 +21,8 @@
     "room-check": "tsx scripts/roomLoadCheck.ts",
     "safety-check": "tsx scripts/safetyCheck.ts",
     "ladder-check": "tsx scripts/ladderCheck.ts",
-    "seed:dev": "node scripts/seedDev.mjs"
+    "seed:dev": "node scripts/seedDev.mjs",
+    "pulse-check": "node scripts/pulseCheck.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
