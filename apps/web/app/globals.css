@@ -1833,3 +1833,193 @@ body:has(.call-bar) .page {
   margin-top: 0.85rem;
   color: var(--text-faint);
 }
+
+/* ============================================================ the shell */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  height: var(--nav-height);
+  color: var(--text-faint);
+  text-decoration: none;
+  /* Whole-tab target. A label-sized tap area is the most common reason a
+     bottom bar feels unreliable on a phone. */
+  min-width: 0;
+}
+
+.tab__glyph {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.tab__label {
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+}
+
+/*
+ * The active tab changes COLOUR only — no pill, no underline, no background.
+ * A bottom bar is read peripherally, and colour is the cheapest signal that
+ * does not add furniture to a screen that is mostly furniture already.
+ */
+.tab--on {
+  color: var(--accent);
+}
+
+/* Every scrolling surface leaves room for the bar. */
+.page {
+  padding-bottom: calc(var(--nav-height) + var(--page-padding) + env(safe-area-inset-bottom));
+}
+
+/* ============================================================== home */
+
+.home-head {
+  margin-bottom: 1.75rem;
+}
+
+.home-head .t-sm {
+  margin-bottom: 0.4rem;
+}
+
+/* -------------------------------------------------------- the question */
+
+.intents {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Bleed to the screen edges so the row reads as scrollable rather than
+     clipped, then pad back in. */
+  margin: 0 calc(var(--page-padding) * -1) 2rem;
+  padding: 0 var(--page-padding) 0.25rem;
+}
+
+.intents::-webkit-scrollbar {
+  display: none;
+}
+
+.intent {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.86rem;
+  padding: 0.6rem 1rem;
+  min-height: 44px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.intent__glyph {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.intent--on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.intent:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------- room cards */
+
+.roomlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.roomcard {
+  display: block;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.roomcard:hover {
+  border-color: var(--border-strong);
+}
+
+.roomcard__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+
+/*
+ * The temperature label sits quietly beside the name. It is a category, not a
+ * badge — the sentence underneath is what actually tells someone what this
+ * room is, and the label must not out-shout it.
+ */
+.roomcard__temp {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.roomcard__who {
+  margin-bottom: 0.6rem;
+}
+
+/*
+ * The social contract. The most useful line on the card, so it gets the space
+ * and the left rule — it reads as the room speaking rather than as metadata.
+ */
+.roomcard__says {
+  border-left: 2px solid var(--border-strong);
+  padding-left: 0.75rem;
+  margin-bottom: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.roomcard__go {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.home-nights {
+  margin-top: 2rem;
+  color: var(--text-faint);
+  text-align: center;
+}

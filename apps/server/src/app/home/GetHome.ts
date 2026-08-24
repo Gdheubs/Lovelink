@@ -172,8 +172,14 @@ function suitsIntent(temperature: RoomTemperature, occupancy: number, intent: In
       return occupancy > 0 && occupancy <= 6;
     case 'think':
       return temperature === 'deep';
-    case 'meet':
-      return temperature !== 'quiet' && occupancy > 0;
+    case 'be':
+      /*
+       * Somewhere with enough life that the room is not silent, and enough
+       * people that nobody is waiting for you to say something. The worst
+       * possible answer here is a room of two — which is company that expects
+       * a conversation.
+       */
+      return occupancy >= 3;
   }
 }
 

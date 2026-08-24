@@ -59,7 +59,7 @@ export default function WelcomePage() {
 
   // Someone already signed in has no business reading the pitch.
   useEffect(() => {
-    if (status === 'authenticated') router.replace('/rooms');
+    if (status === 'authenticated') router.replace('/home');
   }, [status, router]);
 
   /*

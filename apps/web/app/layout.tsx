@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '../lib/AuthProvider';
 import { SignallingProvider } from '../lib/SignallingProvider';
 import { PwaProvider } from '../lib/PwaProvider';
+import { BottomNav } from '../lib/BottomNav';
 import './globals.css';
 
 /**
@@ -50,7 +51,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             SignallingProvider for why this cannot live on a page.
           */}
           <PwaProvider>
-            <SignallingProvider>{children}</SignallingProvider>
+            <SignallingProvider>
+              {children}
+              <BottomNav />
+            </SignallingProvider>
           </PwaProvider>
         </AuthProvider>
       </body>

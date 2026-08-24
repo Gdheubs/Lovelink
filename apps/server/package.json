@@ -20,7 +20,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "room-check": "tsx scripts/roomLoadCheck.ts",
     "safety-check": "tsx scripts/safetyCheck.ts",
-    "ladder-check": "tsx scripts/ladderCheck.ts"
+    "ladder-check": "tsx scripts/ladderCheck.ts",
+    "seed:dev": "node scripts/seedDev.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

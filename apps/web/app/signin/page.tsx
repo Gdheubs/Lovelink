@@ -42,7 +42,7 @@ export default function SignInPage() {
 
   // Someone who is already signed in has no business here.
   useEffect(() => {
-    if (status === 'authenticated') router.replace('/profile');
+    if (status === 'authenticated') router.replace('/home');
   }, [status, router]);
 
   // Move focus with the flow, so a phone keyboard stays useful and a screen
@@ -75,7 +75,7 @@ export default function SignInPage() {
     try {
       await api.verifyLoginCode({ identifier, code });
       await onSignedIn();
-      router.replace('/profile');
+      router.replace('/home');
     } catch (caught) {
       // The one branch that is not a failure: the identifier is new, so the
       // server is asking for the details it needs to create the account.
@@ -98,7 +98,7 @@ export default function SignInPage() {
     try {
       await api.verifyLoginCode({ identifier, code, displayName, dob });
       await onSignedIn();
-      router.replace('/profile');
+      router.replace('/home');
     } catch (caught) {
       setError(messageFor(caught));
 

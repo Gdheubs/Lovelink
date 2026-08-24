@@ -331,6 +331,38 @@ export interface DmMessage {
   sentAt: string;
 }
 
+export type Intent = 'listen' | 'talk' | 'think' | 'connect' | 'be';
+export type RoomTemperature = 'quiet' | 'warm' | 'deep';
+
+export interface HomeRoom {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  temperature: RoomTemperature;
+  listening: number;
+  speaking: number;
+  pulse: string | null;
+  /**
+   * Whether this room suits the stated intent.
+   *
+   * DELIBERATELY NEVER RENDERED. The server uses it to order the list; showing
+   * it would turn a suggestion into a visible mechanism, and a visible
+   * mechanism is one people start playing. It is typed here only because the
+   * response carries it.
+   */
+  matchesIntent: boolean;
+}
+
+export interface HomeView {
+  greeting: 'morning' | 'afternoon' | 'evening' | 'late';
+  displayName: string;
+  intent: Intent | null;
+  live: HomeRoom[];
+  quiet: HomeRoom[];
+  nights: number;
+}
+
 export const api = {
   /**
    * Ask for a login code.
@@ -526,6 +558,27 @@ export const api = {
    */
   async setTimeZone(timeZone: string): Promise<void> {
     await request('/me/timezone', { method: 'PUT', body: { timeZone } });
+  },
+
+  // -- home ----------------------------------------------------------------
+
+  /**
+   * Everything the home screen needs, in one request.
+   *
+   * One call rather than three, because the alternative is a screen that
+   * assembles itself in stages on exactly the slow connection this product is
+   * built for.
+   */
+  async getHome(): Promise<HomeView> {
+    return request('/home');
+  },
+
+  async setIntent(intent: Intent): Promise<void> {
+    await request('/me/intent', { method: 'PUT', body: { intent } });
+  },
+
+  async clearIntent(): Promise<void> {
+    await request('/me/intent', { method: 'DELETE' });
   },
 
   // -- push ----------------------------------------------------------------

@@ -19,14 +19,14 @@
  * TTL and disappears without anything having to run.
  */
 
-export type Intent = 'listen' | 'talk' | 'connect' | 'think' | 'meet';
+export type Intent = 'listen' | 'talk' | 'think' | 'connect' | 'be';
 
 export const INTENTS: readonly Intent[] = Object.freeze([
   'listen',
   'talk',
-  'connect',
   'think',
-  'meet',
+  'connect',
+  'be',
 ] as const);
 
 export function isIntent(value: string): value is Intent {
@@ -42,9 +42,21 @@ export interface IntentCopy {
 export const INTENT: Readonly<Record<Intent, IntentCopy>> = Object.freeze({
   listen: { label: 'Listen', effect: 'We will show you quieter rooms.' },
   talk: { label: 'Talk', effect: 'We will show you rooms with a conversation going.' },
-  connect: { label: 'Connect', effect: 'We will show you smaller rooms.' },
   think: { label: 'Think', effect: 'We will show you rooms having longer conversations.' },
-  meet: { label: 'Meet someone', effect: 'We will show you rooms where people are talking.' },
+  connect: { label: 'Connect', effect: 'We will show you smaller rooms.' },
+  /*
+   * "Just be here" replaced an earlier "Meet someone", for two reasons.
+   *
+   * It DUPLICATED Open Door, which already says "I am open to meeting someone
+   * tonight" — and says it to the right audience, which is people you have
+   * already shared a room with rather than a ranking function.
+   *
+   * And it is the truest thing this product offers. Somebody who opens the app
+   * at 2am often does not want to listen, talk, think or connect; they want to
+   * not be alone in a room, with no expectation attached. Every other option
+   * asks something of them. This one does not.
+   */
+  be: { label: 'Just be here', effect: 'We will show you rooms you can sit in quietly.' },
 });
 
 /**
