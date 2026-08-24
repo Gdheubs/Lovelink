@@ -9,6 +9,8 @@ import type {
 import type { RoomRole } from '../../domain/entities/RoomMember.js';
 import type { UserId } from '../../domain/values/ids.js';
 import { toPublicProfile } from '../../domain/entities/User.js';
+import { standingFor } from '../../domain/values/speakingQueue.js';
+import { atLeast } from '../../domain/entities/RoomMember.js';
 
 /**
  * Assembles the `room:state` snapshot.
@@ -78,6 +80,9 @@ export async function buildRoomState(
 
   const blocked = new Set(await ports.relationships.listBlockedIds(options.viewerId));
 
+  // Only the host is shown who has a hand up — see RoomMemberView.handRaised.
+  const viewerIsHost = room.hostUserId === options.viewerId;
+
   const members: RoomMemberView[] = [];
   for (const entry of presentEntries) {
     // Mutual invisibility. The blocked party is simply not in the room as far
@@ -87,7 +92,7 @@ export async function buildRoomState(
     const user = profiles.get(entry.userId);
     if (user === undefined) continue; // deleted mid-session; skip rather than crash
 
-    members.push(toMemberView(entry, user));
+    members.push(toMemberView(entry, user, { revealHands: viewerIsHost }));
   }
 
   // Stable ordering, so the list does not shuffle on every re-render: host
@@ -98,6 +103,18 @@ export async function buildRoomState(
 
   const selfEntry = presentEntries.find((entry) => entry.userId === options.viewerId);
 
+  /**
+   * The queue, oldest first.
+   *
+   * The order hands went up and nothing else — no priority, no trust
+   * weighting. In a room where everyone can see each other it is the only
+   * ordering nobody can argue with.
+   */
+  const queue = presentEntries
+    .filter((entry) => entry.handRaisedAtMs !== null)
+    .sort((a, b) => (a.handRaisedAtMs ?? 0) - (b.handRaisedAtMs ?? 0))
+    .map((entry) => entry.userId);
+
   return {
     roomId: room.id,
     title: room.title,
@@ -105,10 +122,16 @@ export async function buildRoomState(
     hostUserId: room.hostUserId,
     maxSpeakers: room.maxSpeakers,
     members,
-    raisedHands: presentEntries
-      .filter((entry) => entry.handRaisedAtMs !== null)
-      .sort((a, b) => (a.handRaisedAtMs ?? 0) - (b.handRaisedAtMs ?? 0))
-      .map((entry) => entry.userId),
+    // HOST ONLY. See the port: broadcasting the queue turns waiting into a
+    // scoreboard, and everyone else gets `yourStanding` instead.
+    raisedHands: viewerIsHost ? queue : [],
+    yourStanding: standingFor({
+      userId: options.viewerId,
+      isSpeaker: atLeast(selfEntry?.role ?? 'listener', 'speaker'),
+      raisedHands: queue,
+      maxSpeakers: room.maxSpeakers,
+      currentSpeakers: presentEntries.filter((entry) => atLeast(entry.role, 'speaker')).length,
+    }),
     recentMessages,
     // Falls back to listener: if presence has already lapsed for the viewer,
     // the least-privileged answer is the safe one.
@@ -143,12 +166,19 @@ async function loadProfiles(
   return new Map(users.map((user) => [user.id, toPublicProfile(user)]));
 }
 
-function toMemberView(entry: PresenceEntry, user: Profile): RoomMemberView {
+function toMemberView(
+  entry: PresenceEntry,
+  user: Profile,
+  options: { readonly revealHands: boolean } = { revealHands: false },
+): RoomMemberView {
   return {
     user,
     role: entry.role,
     mutedByHost: entry.mutedByHost,
-    handRaised: entry.handRaisedAtMs !== null,
+    // Default FALSE. A caller has to ask for it, which is what stops it
+    // leaking through a path nobody thought about — `user:joined` is broadcast
+    // to the whole room and must never carry it.
+    handRaised: options.revealHands && entry.handRaisedAtMs !== null,
   };
 }
 

@@ -245,4 +245,91 @@ describe('host-only events over a real socket', () => {
       malloryClient.disconnect();
     }
   }, 20_000);
+
+  // =========================================================================
+  describe('what a waiting person is told', () => {
+    /**
+     * THE QUEUE DOES NOT REACH LISTENERS.
+     *
+     * A privacy rule rather than a rendering preference — a UI that ignores a
+     * field it was sent is not the same as never being sent it. Broadcasting
+     * who is waiting turns the room into a scoreboard, and exposes one
+     * person's intention to speak to an audience with no use for it.
+     */
+    it('A LISTENER NEVER RECEIVES THE QUEUE', async () => {
+      const { room, aliceClient, malloryClient } = await setUpRoom();
+
+      aliceClient.emit('hand:raise', { roomId: room.id });
+      await sleep(250);
+
+      // Mallory re-joins to take a fresh snapshot now that Alice is waiting.
+      malloryClient.clear();
+      malloryClient.emit('room:join', { roomId: room.id });
+      const state = await malloryClient.next<{
+        raisedHands: string[];
+        members: { user: { id: string }; handRaised: boolean }[];
+      }>('room:state');
+
+      expect(state?.raisedHands).toEqual([]);
+
+      // Alice IS in the member list — she is in the room, and hiding that
+      // would be a different and much worse product. What must not be there is
+      // any indication that she is WAITING.
+      const alicesRow = state?.members.find((member) => member.user.id === alice.id);
+      expect(alicesRow).toBeDefined();
+      expect(alicesRow?.handRaised).toBe(false);
+    });
+
+    it('the host DOES receive it, because approving is their job', async () => {
+      const { room, hostClient, aliceClient } = await setUpRoom();
+
+      aliceClient.emit('hand:raise', { roomId: room.id });
+      await sleep(250);
+
+      hostClient.clear();
+      hostClient.emit('room:join', { roomId: room.id });
+      const state = await hostClient.next<{
+        raisedHands: string[];
+        members: { user: { id: string }; handRaised: boolean }[];
+      }>('room:state');
+
+      expect(state?.raisedHands).toContain(alice.id);
+      expect(state?.members.find((m) => m.user.id === alice.id)?.handRaised).toBe(true);
+    });
+
+    it('tells a waiting person their position, and never a countdown', async () => {
+      const { room, aliceClient } = await setUpRoom();
+
+      aliceClient.emit('hand:raise', { roomId: room.id });
+      await sleep(250);
+
+      aliceClient.clear();
+      aliceClient.emit('room:join', { roomId: room.id });
+      const state = await aliceClient.next<{
+        yourStanding: { state: string; position: number | null; wait: string | null };
+      }>('room:state');
+
+      expect(state?.yourStanding.position).toBe(1);
+
+      // A number to the second would turn a conversation into a queueing
+      // system, and would be false precision besides.
+      const wait = state?.yourStanding.wait;
+      if (wait !== null && wait !== undefined) {
+        expect(wait).not.toMatch(/\d+\s*seconds?/);
+        expect(wait).not.toMatch(/\d+m\s*\d/);
+      }
+    });
+
+    it('a listener with no hand up is simply listening', async () => {
+      const { room, malloryClient } = await setUpRoom();
+
+      // Re-join for a fresh snapshot: `setUpRoom` already consumed the first
+      // one, and the harness's `next` only looks forward.
+      malloryClient.clear();
+      malloryClient.emit('room:join', { roomId: room.id });
+      const state = await malloryClient.next<{ yourStanding: { state: string } }>('room:state');
+
+      expect(state?.yourStanding.state).toBe('listening');
+    });
+  });
 });

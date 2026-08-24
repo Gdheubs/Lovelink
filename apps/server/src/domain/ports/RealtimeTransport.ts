@@ -2,6 +2,7 @@ import type { PublicProfile } from '../entities/User.js';
 import type { RoomRole } from '../entities/RoomMember.js';
 import type { DomainErrorCode } from '../errors.js';
 import type { RoomId, UserId } from '../values/ids.js';
+import type { QueueStanding } from '../values/speakingQueue.js';
 
 /**
  * PORT: RealtimeTransport
@@ -32,6 +33,17 @@ export interface RoomMemberView {
   readonly user: PublicProfile;
   readonly role: RoomRole;
   readonly mutedByHost: boolean;
+  /**
+   * Whether this person has a hand up — TRUE ONLY IN THE HOST'S SNAPSHOT.
+   *
+   * Always false for everyone else, for the same reason `raisedHands` is empty
+   * for them. Narrowing the queue list alone would have been cosmetic: a flag
+   * on each member says exactly the same thing, one row at a time, and a
+   * listener reading the member list would still see precisely who is waiting.
+   *
+   * That is the scoreboard the design refuses — someone waiting should be
+   * visible to the person who can act on it, and to nobody else.
+   */
   readonly handRaised: boolean;
 }
 
@@ -58,7 +70,28 @@ export interface RoomStateView {
   readonly hostUserId: UserId;
   readonly maxSpeakers: number;
   readonly members: readonly RoomMemberView[];
+  /**
+   * Who has a hand up, oldest first — VISIBLE TO THE HOST ONLY.
+   *
+   * Empty for everybody else, and that is a privacy rule rather than a
+   * rendering preference. Broadcasting the queue to the room turns waiting into
+   * a scoreboard: it invites people to weigh who is ahead of them and how long
+   * they have been there, and it exposes one person's intention to speak to an
+   * audience that has no use for it.
+   *
+   * The host needs it because approving is their job. A listener needs to know
+   * one thing — where they stand — and gets that in `yourStanding`.
+   */
   readonly raisedHands: readonly UserId[];
+
+  /**
+   * Where THIS viewer stands: listening, waiting, next, or speaking.
+   *
+   * Per-viewer, so it belongs to the snapshot rather than to a broadcast — the
+   * same reason `selfRole` does. It carries a position and a coarse wait and
+   * names nobody else.
+   */
+  readonly yourStanding: QueueStanding;
   /** Short tail of recent chat so a reconnecting user is not staring at a blank room. */
   readonly recentMessages: readonly ChatMessageView[];
   /** Present only in the snapshot sent to the joining user, never broadcast. */
