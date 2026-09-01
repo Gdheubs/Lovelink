@@ -1,0 +1,61 @@
+# render.yaml — Infrastructure as Code for Render.com deployment
+#
+# Deploy with: render deploy --file render.yaml
+# Or connect GitHub and Render auto-deploys on push
+#
+# This file is optional — you can also configure via the Render dashboard.
+# If using this file, commit it to your repo for reproducibility.
+
+services:
+  - type: web
+    name: loverlink-api
+    env: docker
+    dockerfilePath: apps/server/Dockerfile
+    region: ohio  # change to your preferred region
+    plan: starter  # free tier
+    
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: HOST
+        value: 0.0.0.0
+      - key: PERSISTENCE
+        value: postgres
+      - key: REALTIME_IN_PROCESS
+        value: true
+      
+      # Database — from Supabase
+      - key: DATABASE_URL
+        sync: false  # set in Render dashboard or via .env.production
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: true
+      
+      # Redis — from Upstash
+      - key: REDIS_URL
+        sync: false
+      
+      # LiveKit
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      
+      # Security
+      - key: CORS_ORIGINS
+        value: https://yourdomain.vercel.app  # update with your domain
+      - key: PUBLIC_WEB_URL
+        value: https://yourdomain.vercel.app
+      - key: TRUST_PROXY
+        value: true
+      
+      # Secrets (generate these locally, do NOT commit to git)
+      - key: ACCESS_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false

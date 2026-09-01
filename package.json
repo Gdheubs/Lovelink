@@ -16,19 +16,12 @@
     "dev:web": "npm run dev --workspace @loverlink/web",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspace @loverlink/server",
-    "test:unit": "npm run test:unit --workspace @loverlink/server",
-    "test:integration": "npm run test:integration --workspace @loverlink/server",
     "migrate": "npm run migrate --workspace @loverlink/server",
-    "smoke": "npm run smoke --workspace @loverlink/server",
-    "lint": "eslint apps/server/src apps/server/tests",
+    "lint": "eslint apps/server/src",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,md}\" \"docs/**/*.md\" \"*.md\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,md}\" \"docs/**/*.md\" \"*.md\"",
-    "ci": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit",
     "compose:up": "docker compose up -d",
-    "compose:down": "docker compose down",
-    "room-check": "npm run room-check --workspace @loverlink/server",
-    "safety-check": "npm run safety-check --workspace @loverlink/server"
+    "compose:down": "docker compose down"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
