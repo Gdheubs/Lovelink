@@ -7,7 +7,10 @@ coverage/
 .env
 .env.local
 .env.*.local
+.env.production
 !.env.example
+!.env.render.example
+!.env.production.example
 .DS_Store
 *.log
 .livekit/
